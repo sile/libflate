@@ -65,7 +65,7 @@ impl Decoder2 {
             }
             codes.push((code as u16, count));
         }
-        println!("=> {:?}", codes);
+        // println!("=> {:?}", codes);
         codes.sort_by_key(|x| x.1);
 
         let mut cs = Codes::new();
@@ -95,6 +95,9 @@ impl Decoder2 {
         }
         Err(io::Error::new(io::ErrorKind::InvalidData, "TODO"))
     }
+    pub fn codes(self) -> Codes {
+        self.codes
+    }
 }
 
 pub struct Decoder {
@@ -102,6 +105,12 @@ pub struct Decoder {
     distance_codes: Codes,
 }
 impl Decoder {
+    pub fn new(lite: Codes, dist: Codes) -> Self {
+        Decoder {
+            literal_codes: lite,
+            distance_codes: dist,
+        }
+    }
     pub fn new_fixed() -> Self {
         Decoder {
             literal_codes: fixed_literal_length_codes(),
@@ -115,7 +124,7 @@ impl Decoder {
         let mut length = 1;
         for _ in 0..16 {
             if let Some(decoded) = self.literal_codes.decode(length, code) {
-                println!("! {}@{0:b}[{}] => {}", code, length, decoded);
+                // println!("! {}@{0:b}[{}] => {}", code, length, decoded);
                 let s = match decoded {
                     0...255 => Symbol::Literal(decoded as u8),
                     256 => Symbol::EndOfBlock,
@@ -143,9 +152,9 @@ impl Decoder {
         let mut length = 1;
         for _ in 0..16 {
             if let Some(decoded) = self.distance_codes.decode(length, code) {
-                println!("@ {} => {}", code, decoded);
+                // println!("@ {} => {}", code, decoded);
                 let (base, extra) = decode_distance(decoded);
-                println!("# {}, {}", base, extra);
+                // println!("# {}, {}", base, extra);
                 let distance = base + try!(reader.read_bits_u16(extra)) as u16;
                 return Ok(distance);
             }

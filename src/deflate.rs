@@ -39,6 +39,28 @@ impl<R> Decoder<R>
             Ok(())
         }
     }
+    fn decode3(&mut self, code: u16, v: &mut Vec<u8>) -> io::Result<()> {
+        match code {
+            0...15 => {
+                v.push(code as u8);
+            }
+            16 => {
+                let count = try!(self.reader.read_bits_u8(2)) + 3;
+                let last = v.last().cloned().unwrap();
+                v.extend(iter::repeat(last).take(count as usize));
+            }
+            17 => {
+                let zeros = try!(self.reader.read_bits_u8(3)) + 3;
+                v.extend(iter::repeat(0).take(zeros as usize));
+            }
+            18 => {
+                let zeros = try!(self.reader.read_bits_u8(7)) + 11;
+                v.extend(iter::repeat(0).take(zeros as usize));
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
     fn read_compressed_block(&mut self, is_dynamic: bool) -> io::Result<()> {
         let mut huffman = if is_dynamic {
             let hlit = try!(self.reader.read_bits_u8(5)) as u16 + 257;
@@ -50,44 +72,47 @@ impl<R> Decoder<R>
             for &i in indices.iter().take(hclen as usize) {
                 hc[i] = try!(self.reader.read_bits_u8(3));
             }
-            println!("{:?}", hc);
             let mut code_length_codes = huffman::Decoder2::from_lens(&hc[..]);
 
             let mut lit_lens = Vec::with_capacity(hlit as usize);
             while lit_lens.len() < hlit as usize {
                 let c = try!(code_length_codes.decode(&mut self.reader));
-                match c {
-                    0...15 => {
-                        lit_lens.push(c as u8);
-                    }
-                    16 => {
-                        let count = try!(self.reader.read_bits_u8(2)) + 3;
-                        let last = lit_lens.last().cloned().unwrap();
-                        lit_lens.extend(iter::repeat(last).take(count as usize));
-                    }
-                    17 => {
-                        let zeros = try!(self.reader.read_bits_u8(3)) + 3;
-                        lit_lens.extend(iter::repeat(0).take(zeros as usize));
-                    }
-                    18 => {
-                        let zeros = try!(self.reader.read_bits_u8(7)) + 11;
-                        lit_lens.extend(iter::repeat(0).take(zeros as usize));
-                    }
-                    _ => unreachable!(),
-                }
+                try!(self.decode3(c, &mut lit_lens));
             }
-            println!("{:?}", lit_lens);
-            let mut lite_codes = huffman::Decoder2::from_lens(&lit_lens[..]);
+            let lite_codes = huffman::Decoder2::from_lens(&lit_lens[..]);
 
-            panic!("# {}, {}, {}", hlit, hdist, hclen);
+            let mut dist_lens = Vec::with_capacity(hdist as usize);
+            while dist_lens.len() < hdist as usize {
+                let c = try!(code_length_codes.decode(&mut self.reader));
+                try!(self.decode3(c, &mut dist_lens));
+            }
+            let dist_codes = huffman::Decoder2::from_lens(&dist_lens[..]);
+
+            huffman::Decoder::new(lite_codes.codes(), dist_codes.codes())
         } else {
             huffman::Decoder::new_fixed()
         };
         loop {
             let s = try!(huffman.decode_one(&mut self.reader));
-            println!("SYM: {:?}", s);
+            match s {
+                huffman::Symbol::Literal(b) => {
+                    self.block_buf.push(b);
+                }
+                huffman::Symbol::Share { length, distance } => {
+                    // TODO: optimize
+                    let start = self.block_buf.len() - distance as usize;
+                    let tmp = self.block_buf[start..][..length as usize]
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    self.block_buf.extend(tmp);
+                }
+                huffman::Symbol::EndOfBlock => {
+                    break;
+                }
+            }
         }
-        panic!()
+        Ok(())
     }
 }
 impl<R> Read for Decoder<R>
@@ -104,7 +129,6 @@ impl<R> Read for Decoder<R>
         } else {
             let bfinal = try!(self.reader.read_bit());
             let btype = try!(self.reader.read_bits_u8(2));
-            println!("BFINAL: {}", bfinal);
             self.eos = bfinal;
             match btype {
                 0b00 => {
