@@ -5,3 +5,7 @@ authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 
 [dependencies]
 byteorder = "*"
+bitflags = "*"
+
+[dev-dependencies]
+clap = "*"

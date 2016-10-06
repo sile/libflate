@@ -23,6 +23,9 @@ impl<R> Decoder<R>
             eos: false,
         }
     }
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        self.reader.as_inner_mut()
+    }
     pub fn into_reader(self) -> R {
         self.reader.into_byte_reader()
     }
@@ -167,6 +170,9 @@ impl<R> BitReader<R>
             last_byte: 0,
             offset: 8,
         }
+    }
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        &mut self.byte_reader
     }
     pub fn into_byte_reader(self) -> R {
         self.byte_reader
