@@ -104,11 +104,10 @@ impl<R> Decoder<R>
                 huffman::Symbol::Share { length, distance } => {
                     // TODO: optimize
                     let start = self.block_buf.len() - distance as usize;
-                    let tmp = self.block_buf[start..][..length as usize]
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    self.block_buf.extend(tmp);
+                    for i in start..start + length as usize {
+                        let b = self.block_buf[i];
+                        self.block_buf.push(b);
+                    }
                 }
                 huffman::Symbol::EndOfBlock => {
                     break;
