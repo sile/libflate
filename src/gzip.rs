@@ -1,8 +1,10 @@
 /// https://tools.ietf.org/html/rfc1952
 use std::io;
 use std::io::Read;
+use std::io::Write;
 use std::ffi::CString;
 use byteorder::ReadBytesExt;
+use byteorder::WriteBytesExt;
 use byteorder::LittleEndian;
 
 use deflate;
@@ -40,6 +42,15 @@ impl CompressionMethod {
             COMPRESSION_METHOD_DEFLATE => CompressionMethod::Deflate,
             method => CompressionMethod::Undefined(method),
         })
+    }
+    pub fn write_to<W>(&self, mut writer: W) -> io::Result<()>
+        where W: io::Write
+    {
+        let byte = match *self {
+            CompressionMethod::Deflate => COMPRESSION_METHOD_DEFLATE,
+            CompressionMethod::Undefined(b) => b,
+        };
+        writer.write_u8(byte)
     }
 }
 
@@ -99,6 +110,29 @@ impl Default for Header {
     }
 }
 impl Header {
+    pub fn write_to<W>(&self, mut writer: W) -> io::Result<()>
+        where W: io::Write
+    {
+        try!(writer.write_all(&self.id));
+        try!(self.compression_method.write_to(&mut writer));
+        try!(writer.write_u8(self.flags.bits())); // TODO: gurantees consistency
+        try!(writer.write_u32::<LittleEndian>(self.modification_time));
+        try!(writer.write_u8(self.extra_flags));
+        try!(self.os.write_to(&mut writer));
+        if let Some(ref x) = self.extra_field {
+            try!(x.write_to(&mut writer));
+        }
+        if let Some(ref x) = self.filename {
+            try!(writer.write_all(x.as_bytes_with_nul()));
+        }
+        if let Some(ref x) = self.comment {
+            try!(writer.write_all(x.as_bytes_with_nul()));
+        }
+        if let Some(x) = self.header_crc{
+            try!(writer.write_u16::<LittleEndian>(x));
+        }
+        Ok(())
+    }
     pub fn read_from<R>(mut reader: R) -> io::Result<Self>
         where R: io::Read
     {
@@ -167,6 +201,14 @@ impl ExtraField {
             data: data,
         })
     }
+    pub fn write_to<W>(&self, mut writer: W) -> io::Result<()>
+        where W: io::Write
+    {
+        try!(writer.write_all(&self.id));
+        try!(writer.write_u16::<LittleEndian>(self.data.len() as u16()));
+        try!(writer.write_all(&self.data));
+        Ok(())
+    }    
 }
 
 #[derive(Debug, Clone)]
@@ -189,6 +231,31 @@ pub enum Os {
     Undefined(u8),
 }
 impl Os {
+    pub fn as_byte(&self) -> u8 {
+        match *self {
+            Os::Fat => OS_FAT,
+            Os::Amiga => OS_AMIGA,
+            Os::Vms => OS_VMS,
+            Os::Unix => OS_UNIX,
+            Os::VmCms => OS_VM_CMS,
+            Os::AtariTos => OS_ATARI_TOS,
+            Os::Hpfs => OS_HPFS,
+            Os::Macintosh => OS_MACINTOSH,
+            Os::ZSystem => OS_Z_SYSTEM,
+            Os::CpM => OS_CPM,
+            Os::Tops20 => OS_TOPS20,
+            Os::Ntfs => OS_NTFS,
+            Os::Qdos => OS_QDOS,
+            Os::AcornRiscos => OS_ACORN_RISCOS,
+            Os::Unknown => OS_UNKNOWN,
+            Os::Undefined(os) => os 
+        }
+    }
+    pub fn write_to<W>(&self, mut writer: W) -> io::Result<()>
+        where W: io::Write
+    {
+        writer.write_u8(self.as_byte())
+    }
     pub fn read_from<R>(mut reader: R) -> io::Result<Self>
         where R: io::Read
     {
@@ -210,6 +277,54 @@ impl Os {
             OS_UNKNOWN => Os::Unknown,
             os => Os::Undefined(os),
         })
+    }
+}
+
+pub struct EncodeOptions;
+
+enum EncodePhase {
+    Header,
+    Data,
+}
+
+pub struct Encoder<W> where W: io::Write {
+    phase: EncodePhase,
+    header: Header,
+    writer: W,
+}
+impl<W> Encoder<W>
+    where W: io::Write
+{
+    pub fn new(writer: W) -> Self {
+        Encoder {
+            phase: EncodePhase::Header,
+            header: Header::default(),
+            writer: writer,
+        }
+    }
+}
+impl<W> io::Write for Encoder<W>
+    where W: io::Write
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self.phase {
+            EncodePhase::Header => {
+                try!(self.header.write_to(&mut self.writer));
+                self.phase = EncodePhase::Data;
+                self.write(buf)
+            }
+            EncodePhase::Data => {
+                panic!()
+            }
+        }
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        panic!()
+    }
+}
+impl <W> Drop for Encoder<W> where W: io::Write {
+    fn drop(&mut self) {
+        self.flush().unwrap();
     }
 }
 

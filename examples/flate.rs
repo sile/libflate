@@ -26,6 +26,7 @@ fn main() {
             .default_value("-"))
         .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
         .subcommand(SubCommand::with_name("gzip-decode"))
+        .subcommand(SubCommand::with_name("gzip-encode"))
         .get_matches();
 
     let input_filename = matches.value_of("INPUT").unwrap();
@@ -35,7 +36,7 @@ fn main() {
         Box::new(fs::File::open(input_filename)
             .expect(&format!("Can't open file: {}", input_filename)))
     };
-    let input = io::BufReader::new(input);
+    let mut input = io::BufReader::new(input);
 
     let output_filename = matches.value_of("OUTPUT").unwrap();
     let output: Box<io::Write> = if output_filename == "-" {
@@ -61,6 +62,9 @@ fn main() {
             let (_, _, trailer) = decoder.finish().unwrap();
             let _ = writeln!(&mut io::stderr(), "TRAILER: {:?}", trailer);
         }
+    } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
+        let mut encoder = gzip::Encoder::new(output);
+        io::copy(&mut input, &mut encoder).expect("Encoding GZIP stream failed");
     } else {
         println!("{}", matches.usage());
         process::exit(1);
