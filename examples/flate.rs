@@ -43,6 +43,8 @@ fn main() {
     let output_filename = matches.value_of("OUTPUT").unwrap();
     let output: Box<io::Write> = if output_filename == "-" {
         Box::new(io::stdout())
+    } else if output_filename == "/dev/null" {
+        Box::new(io::sink())
     } else {
         Box::new(fs::File::create(output_filename)
             .expect(&format!("Can't create file: {}", output_filename)))
