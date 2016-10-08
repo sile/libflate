@@ -26,6 +26,7 @@ fn main() {
             .default_value("-"))
         .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
         .subcommand(SubCommand::with_name("copy"))
+        .subcommand(SubCommand::with_name("bit-read"))
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .get_matches();
@@ -51,6 +52,9 @@ fn main() {
     let verbose = matches.is_present("VERBOSE");
     if let Some(_matches) = matches.subcommand_matches("copy") {
         io::copy(&mut input, &mut output).expect("Coyping failed");
+    } else if let Some(_matches) = matches.subcommand_matches("bit-read") {
+        let mut reader = libflate::deflate::BitReader::new(input);
+        while let Ok(_) = reader.read_bit() {}
     } else if let Some(_matches) = matches.subcommand_matches("gzip-decode") {
         let mut decoder = gzip::Decoder::new(input);
         if verbose {
