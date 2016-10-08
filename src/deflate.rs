@@ -102,12 +102,32 @@ impl<R> Decoder<R>
                     self.block_buf.push(b);
                 }
                 huffman::Symbol::Share { length, distance } => {
-                    // TODO: optimize
                     let start = self.block_buf.len() - distance as usize;
                     for i in start..start + length as usize {
                         let b = self.block_buf[i];
                         self.block_buf.push(b);
                     }
+
+                    // use std::ptr;
+
+                    // let src_start = self.block_buf.len() - distance as usize;
+                    // let src_end = src_start + length as usize;
+                    // let dst_start = self.block_buf.len();
+                    // let dst_end = dst_start + length as usize;
+                    // self.block_buf.resize(dst_end, 0);
+                    // if src_end <= dst_start {
+                    //     unsafe {
+                    //         ptr::copy_nonoverlapping(self.block_buf[src_start..].as_ptr(),
+                    //                                  self.block_buf[dst_start..].as_mut_ptr(),
+                    //                                  length as usize);
+                    //     };
+                    // } else {
+                    //     unsafe {
+                    //         ptr::copy(self.block_buf[src_start..].as_ptr(),
+                    //                   self.block_buf[dst_start..].as_mut_ptr(),
+                    //                   length as usize);
+                    //     };
+                    // }
                 }
                 huffman::Symbol::EndOfBlock => {
                     break;
