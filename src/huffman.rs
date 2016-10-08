@@ -2,19 +2,25 @@
 ///
 /// Reference: https://www.ics.uci.edu/~dan/pubs/LenLimHuff.pdf
 use std::io;
+use std::cmp;
 
 use deflate::BitReader; // TODO: move
 
 const CODE_UNDEF: u16 = 0;
 
 pub struct Codes {
+    min_len: u8,
     table: [u16; 0x10000],
 }
 impl Codes {
     fn new() -> Self {
-        Codes { table: [CODE_UNDEF; 0x10000] }
+        Codes {
+            min_len: 0xFF,
+            table: [CODE_UNDEF; 0x10000],
+        }
     }
     fn set_mapping(&mut self, length: u8, from: u16, to: u16) {
+        self.min_len = cmp::min(self.min_len, length);
         self.table[from as usize] = (to << 5) + (length as u16);
     }
     fn decode(&self, length: u8, code: u16) -> Option<u16> {
@@ -98,6 +104,9 @@ impl Decoder2 {
     pub fn codes(self) -> Codes {
         self.codes
     }
+    pub fn min_len(&self) -> u8 {
+        self.codes.min_len
+    }
 }
 
 pub struct Decoder {
@@ -120,9 +129,15 @@ impl Decoder {
     fn decode_literal_or_length<R>(&mut self, reader: &mut BitReader<R>) -> io::Result<Symbol>
         where R: io::Read
     {
-        let mut code = try!(reader.read_bit()) as u16;
-        let mut length = 1;
-        for _ in 0..16 {
+        // let mut code = try!(reader.read_bit()) as u16;
+        // let mut length = 1;
+
+        let mut code = 0;
+        let mut length = self.literal_codes.min_len;
+        for _ in 0..length {
+            code = (code << 1) | (try!(reader.read_bit()) as u16);
+        }
+        for _ in length..16 {
             if let Some(decoded) = self.literal_codes.decode(length, code) {
                 // println!("! {}@{0:b}[{}] => {}", code, length, decoded);
                 let s = match decoded {
