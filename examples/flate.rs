@@ -2,6 +2,7 @@ extern crate clap;
 extern crate libflate;
 
 use std::io;
+use std::io::Read;
 use std::io::Write;
 use std::fs;
 use std::process;
@@ -27,6 +28,11 @@ fn main() {
         .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
         .subcommand(SubCommand::with_name("copy"))
         .subcommand(SubCommand::with_name("bit-read"))
+        .subcommand(SubCommand::with_name("byte-read").arg(Arg::with_name("UNIT")
+            .short("u")
+            .long("unit")
+            .takes_value(true)
+            .default_value("1")))
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .get_matches();
@@ -56,7 +62,23 @@ fn main() {
         io::copy(&mut input, &mut output).expect("Coyping failed");
     } else if let Some(_matches) = matches.subcommand_matches("bit-read") {
         let mut reader = libflate::deflate::BitReader::new(input);
-        while let Ok(_) = reader.read_bit() {}
+        let mut count = 0;
+        while let Ok(_) = reader.read_bit() {
+            count += 1;
+        }
+        println!("COUNT: {}", count);
+    } else if let Some(matches) = matches.subcommand_matches("byte-read") {
+        let unit = matches.value_of("UNIT").and_then(|x| x.parse::<usize>().ok()).unwrap();
+        let mut buf = vec![0; unit];
+        let mut reader = input;
+        let mut count = 0;
+        while let Ok(size) = reader.read(&mut buf) {
+            if size == 0 {
+                break;
+            }
+            count += size;
+        }
+        println!("COUNT: {}", count);
     } else if let Some(_matches) = matches.subcommand_matches("gzip-decode") {
         let mut decoder = gzip::Decoder::new(input);
         if verbose {
