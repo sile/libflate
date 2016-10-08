@@ -25,6 +25,7 @@ fn main() {
             .takes_value(true)
             .default_value("-"))
         .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
+        .subcommand(SubCommand::with_name("copy"))
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .get_matches();
@@ -48,8 +49,9 @@ fn main() {
     let mut output = io::BufWriter::new(output);
 
     let verbose = matches.is_present("VERBOSE");
-
-    if let Some(_matches) = matches.subcommand_matches("gzip-decode") {
+    if let Some(_matches) = matches.subcommand_matches("copy") {
+        io::copy(&mut input, &mut output).expect("Coyping failed");
+    } else if let Some(_matches) = matches.subcommand_matches("gzip-decode") {
         let mut decoder = gzip::Decoder::new(input);
         if verbose {
             let _ = writeln!(&mut io::stderr(),
