@@ -132,11 +132,13 @@ impl Decoder {
         // let mut code = try!(reader.read_bit()) as u16;
         // let mut length = 1;
 
-        let mut code = 0;
+        // let mut code = 0;
+        // let mut length = self.literal_codes.min_len;
+        // for _ in 0..length {
+        //     code = (code << 1) | (try!(reader.read_bit()) as u16);
+        // }
         let mut length = self.literal_codes.min_len;
-        for _ in 0..length {
-            code = (code << 1) | (try!(reader.read_bit()) as u16);
-        }
+        let mut code = try!(reader.read_bits_u16_le(length as usize));
         for _ in length..16 {
             if let Some(decoded) = self.literal_codes.decode(length, code) {
                 // println!("! {}@{0:b}[{}] => {}", code, length, decoded);

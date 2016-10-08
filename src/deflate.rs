@@ -177,13 +177,25 @@ impl<R> BitReader<R>
         self.byte_reader
     }
     pub fn read_bit(&mut self) -> io::Result<bool> {
+        try!(self.fill_byte_if_needed());
+        let bit = (self.last_byte & (1 << self.offset)) != 0;
+        self.offset += 1;
+        Ok(bit)
+    }
+    fn fill_byte_if_needed(&mut self) -> io::Result<()> {
         if self.offset == 8 {
             self.last_byte = try!(self.byte_reader.read_u8());
             self.offset = 0;
         }
-        let bit = (self.last_byte & (1 << self.offset)) != 0;
-        self.offset += 1;
-        Ok(bit)
+        Ok(())
+    }
+    pub fn read_bits_u16_le(&mut self, bits: usize) -> io::Result<u16> {
+        let mut v = 0;
+        for i in (0..bits).rev() {
+            let b = try!(self.read_bit());
+            v |= (b as u16) << i;
+        }
+        Ok(v)
     }
     pub fn read_bits_u8(&mut self, bits: usize) -> io::Result<u8> {
         assert!(bits <= 8);
