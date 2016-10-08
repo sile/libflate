@@ -10,25 +10,25 @@ const CODE_UNDEF: u16 = 0;
 
 pub struct Codes {
     min_len: u8,
-    table: [u16; 0x10000],
+    table: [u16; 0x8000],
 }
 impl Codes {
     fn new() -> Self {
         Codes {
             min_len: 0xFF,
-            table: [CODE_UNDEF; 0x10000],
+            table: [CODE_UNDEF; 0x8000],
         }
     }
     fn set_mapping(&mut self, length: u8, from: u16, to: u16) {
         self.min_len = cmp::min(self.min_len, length);
-        self.table[from as usize] = (to << 5) + (length as u16);
+        self.table[from as usize] = (to << 4) + (length as u16);
     }
     fn decode(&self, length: u8, code: u16) -> Option<u16> {
         let x = self.table[code as usize];
-        if x & 0b11111 != length as u16 {
+        if x & 0b1111 != length as u16 {
             return None;
         } else {
-            Some(x >> 5)
+            Some(x >> 4)
         }
     }
 }
