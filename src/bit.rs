@@ -35,7 +35,7 @@ impl<R> BitReader<R>
         debug_assert!(min_bitwidth <= 16);
         let rest = self.length - self.offset;
         if rest < min_bitwidth {
-            let shortage = rest - min_bitwidth;
+            let shortage = min_bitwidth - rest;
             if shortage <= 8 {
                 try!(self.fill_next_u8());
             } else {
