@@ -46,6 +46,7 @@ impl Codes {
             }
         }
     }
+    #[inline]
     pub fn decode(&self, code: u16) -> Option<(u8, u16)> {
         let i = code & ((1 << self.max_bitwidth) - 1);
         let value = unsafe { *self.table.get_unchecked(i as usize) };
