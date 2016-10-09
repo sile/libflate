@@ -2,9 +2,9 @@ use std::io;
 use std::io::Read;
 use std::cmp;
 use std::iter;
-use byteorder::ReadBytesExt;
 
 use huffman;
+use bit::BitReader;
 
 pub struct Decoder<R> {
     reader: BitReader<R>,
@@ -30,15 +30,16 @@ impl<R> Decoder<R>
         self.reader.into_byte_reader()
     }
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
-        let len = try!(self.reader.read_byte_aligned_u16());
-        let nlen = try!(self.reader.read_byte_aligned_u16());
+        self.reader.align_u8();
+        let len = try!(self.reader.read_u16());
+        let nlen = try!(self.reader.read_u16());
         if !len != nlen {
             Err(io::Error::new(io::ErrorKind::InvalidData,
                                format!("LEN={} is not the one's complement of NLEN={}", len, nlen)))
         } else {
             self.block_buf.resize(len as usize, 0);
             self.block_offset = 0;
-            try!(self.reader.byte_reader.read_exact(&mut self.block_buf));
+            try!(self.reader.as_inner_mut().read_exact(&mut self.block_buf));
             Ok(())
         }
     }
@@ -48,16 +49,16 @@ impl<R> Decoder<R>
                 v.push(code as u8);
             }
             16 => {
-                let count = try!(self.reader.read_bits_u8(2)) + 3;
+                let count = try!(self.reader.read_exact_bits(2)) + 3;
                 let last = v.last().cloned().unwrap();
                 v.extend(iter::repeat(last).take(count as usize));
             }
             17 => {
-                let zeros = try!(self.reader.read_bits_u8(3)) + 3;
+                let zeros = try!(self.reader.read_exact_bits(3)) + 3;
                 v.extend(iter::repeat(0).take(zeros as usize));
             }
             18 => {
-                let zeros = try!(self.reader.read_bits_u8(7)) + 11;
+                let zeros = try!(self.reader.read_exact_bits(7)) + 11;
                 v.extend(iter::repeat(0).take(zeros as usize));
             }
             _ => unreachable!(),
@@ -66,14 +67,14 @@ impl<R> Decoder<R>
     }
     fn read_compressed_block(&mut self, is_dynamic: bool) -> io::Result<()> {
         let mut huffman = if is_dynamic {
-            let hlit = try!(self.reader.read_bits_u8(5)) as u16 + 257;
-            let hdist = try!(self.reader.read_bits_u8(5)) + 1;
-            let hclen = try!(self.reader.read_bits_u8(4)) + 4;
+            let hlit = try!(self.reader.read_exact_bits(5)) + 257;
+            let hdist = try!(self.reader.read_exact_bits(5)) + 1;
+            let hclen = try!(self.reader.read_exact_bits(4)) + 4;
 
             let mut hc = [0; 19];
             let indices = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
             for &i in indices.iter().take(hclen as usize) {
-                hc[i] = try!(self.reader.read_bits_u8(3));
+                hc[i] = try!(self.reader.read_exact_bits(3)) as u8;
             }
             let mut code_length_codes = huffman::Decoder2::from_lens(&hc[..]);
 
@@ -150,7 +151,7 @@ impl<R> Read for Decoder<R>
             Ok(0)
         } else {
             let bfinal = try!(self.reader.read_bit());
-            let btype = try!(self.reader.read_bits_u8(2));
+            let btype = try!(self.reader.read_exact_bits(2));
             self.eos = bfinal;
             match btype {
                 0b00 => {
@@ -172,78 +173,5 @@ impl<R> Read for Decoder<R>
                 _ => unreachable!(),
             }
         }
-    }
-}
-
-pub struct BitReader<R> {
-    byte_reader: R,
-    last_byte: u8,
-    offset: usize,
-}
-impl<R> BitReader<R>
-    where R: Read
-{
-    pub fn new(byte_reader: R) -> Self {
-        BitReader {
-            byte_reader: byte_reader,
-            last_byte: 0,
-            offset: 8,
-        }
-    }
-    pub fn as_inner_mut(&mut self) -> &mut R {
-        &mut self.byte_reader
-    }
-    pub fn into_byte_reader(self) -> R {
-        self.byte_reader
-    }
-    pub fn read_bit(&mut self) -> io::Result<bool> {
-        try!(self.fill_byte_if_needed());
-        let bit = (self.last_byte & (1 << self.offset)) != 0;
-        self.offset += 1;
-        Ok(bit)
-    }
-    fn fill_byte_if_needed(&mut self) -> io::Result<()> {
-        if self.offset == 8 {
-            self.last_byte = try!(self.byte_reader.read_u8());
-            self.offset = 0;
-        }
-        Ok(())
-    }
-    pub fn read_bits_u16_le(&mut self, bits: usize) -> io::Result<u16> {
-        let mut v = 0;
-        for i in (0..bits).rev() {
-            let b = try!(self.read_bit());
-            v |= (b as u16) << i;
-        }
-        Ok(v)
-    }
-    pub fn read_bits_u8(&mut self, bits: usize) -> io::Result<u8> {
-        assert!(bits <= 8);
-        // TODO: optimize
-        let mut n = 0;
-        for i in 0..bits {
-            let bit = try!(self.read_bit());
-            n |= (bit as u8) << i;
-        }
-        Ok(n)
-    }
-    pub fn read_bits_u16(&mut self, bits: usize) -> io::Result<u16> {
-        assert!(bits <= 16);
-        // TODO: optimize
-        let mut n = 0;
-        for i in 0..bits {
-            let bit = try!(self.read_bit());
-            n |= (bit as u16) << i;
-        }
-        Ok(n)
-    }
-    pub fn read_byte_aligned_u16(&mut self) -> io::Result<u16> {
-        if self.offset != 0 {
-            self.last_byte = try!(self.byte_reader.read_u8());
-        }
-        self.offset = 8;
-        let low = self.last_byte as u16;
-        let high = try!(self.byte_reader.read_u8()) as u16;
-        Ok((high << 8) | low)
     }
 }

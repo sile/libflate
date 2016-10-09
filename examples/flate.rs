@@ -61,7 +61,7 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("copy") {
         io::copy(&mut input, &mut output).expect("Coyping failed");
     } else if let Some(_matches) = matches.subcommand_matches("bit-read") {
-        let mut reader = libflate::deflate::BitReader::new(input);
+        let mut reader = libflate::bit::BitReader::new(input);
         let mut count = 0;
         while let Ok(_) = reader.read_bit() {
             count += 1;

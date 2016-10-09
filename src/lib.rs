@@ -8,6 +8,11 @@ pub mod huffman;
 pub mod deflate;
 pub mod gzip;
 
+// TODO: mod checksum
+
+// TODO: private
+pub mod bit;
+
 #[cfg(test)]
 mod tests {
     #[test]
