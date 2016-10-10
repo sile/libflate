@@ -77,10 +77,6 @@ fn main() {
             let _ = writeln!(&mut io::stderr(), "HEADER: {:?}", decoder.header());
         }
         io::copy(&mut decoder, &mut output).expect("Decoding GZIP stream failed");
-        if verbose {
-            let (_, _, trailer) = decoder.finish().unwrap();
-            let _ = writeln!(&mut io::stderr(), "TRAILER: {:?}", trailer);
-        }
     } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
         let mut encoder = gzip::Encoder::new(output);
         io::copy(&mut input, &mut encoder).expect("Encoding GZIP stream failed");
