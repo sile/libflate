@@ -13,6 +13,7 @@ pub mod lz77;
 
 pub mod deflate;
 pub mod gzip;
+pub mod zlib;
 
 mod bit;
 mod huffman;

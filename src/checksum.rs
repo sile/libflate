@@ -1,3 +1,27 @@
+const ADLER32_BASE: u32 = 65521; // largest prime smaller than 65536
+
+#[derive(Debug, Clone)]
+pub struct Adler32 {
+    value: u32,
+}
+impl Adler32 {
+    pub fn new() -> Self {
+        Adler32 { value: 0 }
+    }
+    pub fn value(&self) -> u32 {
+        self.value
+    }
+    pub fn update(&mut self, buf: &[u8]) {
+        let mut s1 = self.value & 0xFFFF;
+        let mut s2 = (self.value >> 16) & 0xFFFF;
+        for &b in buf {
+            s1 = (s1 + b as u32) % ADLER32_BASE;
+            s2 = (s2 + s1) % ADLER32_BASE;
+        }
+        self.value = (s2 << 16) + s1;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Crc32 {
     value: u32,

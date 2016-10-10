@@ -10,6 +10,7 @@ use clap::App;
 use clap::Arg;
 use clap::SubCommand;
 use libflate::gzip;
+use libflate::zlib;
 
 fn main() {
     let matches = App::new("deflate")
@@ -34,6 +35,7 @@ fn main() {
             .default_value("1")))
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
+        .subcommand(SubCommand::with_name("zlib-decode"))
         .get_matches();
 
     let input_filename = matches.value_of("INPUT").unwrap();
@@ -80,6 +82,12 @@ fn main() {
     } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
         let mut encoder = gzip::Encoder::new(output);
         io::copy(&mut input, &mut encoder).expect("Encoding GZIP stream failed");
+    } else if let Some(_matches) = matches.subcommand_matches("zlib-decode") {
+        let mut decoder = zlib::Decoder::new(input).expect("Read ZLIB header failed");
+        if verbose {
+            let _ = writeln!(&mut io::stderr(), "HEADER: {:?}", decoder.header());
+        }
+        io::copy(&mut decoder, &mut output).expect("Decoding ZLIB stream failed");
     } else {
         println!("{}", matches.usage());
         process::exit(1);
