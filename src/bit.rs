@@ -3,6 +3,7 @@ use byteorder::ReadBytesExt;
 
 const LENGTH: u8 = 32;
 
+#[derive(Debug)]
 pub struct BitReader<R> {
     inner: R,
     last_read: u32,

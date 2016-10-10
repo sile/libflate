@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct Crc32 {
     value: u32,
 }

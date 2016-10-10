@@ -11,6 +11,7 @@ use bit::BitReader;
 
 const MAX_DISTANCE: usize = 0x8000;
 
+#[derive(Debug)]
 pub struct Decoder<R> {
     bit_reader: BitReader<R>,
     buffer: Vec<u8>,

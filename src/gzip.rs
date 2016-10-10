@@ -328,6 +328,7 @@ impl<W> Drop for Encoder<W>
     }
 }
 
+#[derive(Debug)]
 pub struct Decoder<R> {
     header: Header,
     reader: deflate::Decoder<R>,
