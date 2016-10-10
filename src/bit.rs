@@ -26,38 +26,38 @@ impl<R> BitReader<R>
         self.offset += 1;
         Ok(bit)
     }
+    #[inline]
     pub fn skip_bits(&mut self, bitwidth: u8) {
         debug_assert!(LENGTH - self.offset >= bitwidth);
         self.offset += bitwidth;
     }
-    pub fn peek_bits(&mut self, min_bitwidth: u8) -> io::Result<u16> {
-        debug_assert!(min_bitwidth <= 16);
-        while (LENGTH - self.offset) < min_bitwidth {
+    #[inline]
+    pub fn peek_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
+        debug_assert!(bitwidth <= 16);
+        while (LENGTH - self.offset) < bitwidth {
             try!(self.fill_next_u8());
         }
-        let bits = self.last_read >> self.offset;
-        Ok(bits as u16)
+        let bits = (self.last_read >> self.offset) as u16;
+        Ok(bits & ((1 << bitwidth) - 1))
     }
-    pub fn read_exact_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
+    pub fn read_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
         let x = try!(self.peek_bits(bitwidth));
         self.skip_bits(bitwidth);
-        Ok(x & ((1 << bitwidth) - 1))
+        Ok(x)
     }
-    pub fn read_u16(&mut self) -> io::Result<u16> {
-        self.read_exact_bits(16)
+    pub fn reset(&mut self) {
+        self.offset = LENGTH;
     }
-    pub fn align_u8(&mut self) {
-        if self.offset % 8 != 0 {
-            let delta = 8 - self.offset % 8;
-            self.offset += delta;
-        }
+    pub fn as_inner_ref(&self) -> &R {
+        &self.inner
     }
     pub fn as_inner_mut(&mut self) -> &mut R {
         &mut self.inner
     }
-    pub fn into_byte_reader(self) -> R {
+    pub fn into_inner(self) -> R {
         self.inner
     }
+    #[inline]
     fn fill_next_u8(&mut self) -> io::Result<()> {
         self.offset -= 8;
         self.last_read >>= 8;

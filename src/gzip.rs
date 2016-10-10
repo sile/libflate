@@ -355,7 +355,7 @@ impl<R> Decoder<R>
     pub fn finish(mut self) -> io::Result<(R, Vec<u8>, Trailer)> {
         let mut buf = Vec::new();
         try!(self.read_to_end(&mut buf));
-        Ok((self.reader.into_reader(), buf, self.trailer.unwrap()))
+        Ok((self.reader.into_inner(), buf, self.trailer.unwrap()))
     }
 }
 impl<R> io::Read for Decoder<R>

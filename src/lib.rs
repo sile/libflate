@@ -10,8 +10,7 @@ pub mod gzip;
 
 // TODO: mod checksum
 
-// TODO: private
-pub mod bit;
+mod bit;
 
 #[cfg(test)]
 mod tests {
