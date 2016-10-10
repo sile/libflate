@@ -331,38 +331,36 @@ impl<W> Drop for Encoder<W>
 
 pub struct Decoder<R> {
     header: Header,
-    trailer: Option<Trailer>,
     reader: deflate::Decoder<R>,
     read_size: u32,
     crc32: checksum::Crc32,
+    eos: bool,
 }
 impl<R> Decoder<R>
     where R: io::Read
 {
-    pub fn new(mut reader: R) -> io::Result<Self> {
-        let header = try!(Header::read_from(&mut reader));
+    pub fn new(mut inner: R) -> io::Result<Self> {
+        let header = try!(Header::read_from(&mut inner));
         Ok(Decoder {
             header: header,
-            trailer: None,
-            reader: deflate::Decoder::new(reader),
+            reader: deflate::Decoder::new(inner),
             read_size: 0,
             crc32: checksum::Crc32::new(),
+            eos: false,
         })
     }
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn finish(mut self) -> io::Result<(R, Vec<u8>, Trailer)> {
-        let mut buf = Vec::new();
-        try!(self.read_to_end(&mut buf));
-        Ok((self.reader.into_inner(), buf, self.trailer.unwrap()))
+    pub fn into_inner(self) -> R {
+        self.reader.into_inner()
     }
 }
 impl<R> io::Read for Decoder<R>
     where R: io::Read
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.trailer.is_some() {
+        if self.eos {
             return Ok(0);
         }
         let read_size = try!(self.reader.read(buf));
@@ -379,8 +377,8 @@ impl<R> io::Read for Decoder<R>
                                         self.crc32.crc(),
                                         trailer.crc))
             } else {
-                self.trailer = Some(trailer);
-                self.read(buf)
+                self.eos = true;
+                Ok(0)
             }
         } else {
             Ok(read_size)
