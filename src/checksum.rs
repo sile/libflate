@@ -1,0 +1,2 @@
+pub struct Crc32 {
+}
