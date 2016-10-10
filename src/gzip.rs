@@ -1,6 +1,5 @@
 /// https://tools.ietf.org/html/rfc1952
 use std::io;
-use std::io::Read;
 use std::io::Write;
 use std::ffi::CString;
 use byteorder::ReadBytesExt;
