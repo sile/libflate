@@ -8,6 +8,7 @@ use byteorder::WriteBytesExt;
 use byteorder::LittleEndian;
 
 use deflate;
+use checksum;
 
 pub const GZIP_ID: [u8; 2] = [31, 139];
 
@@ -333,6 +334,7 @@ pub struct Decoder<R> {
     trailer: Option<Trailer>,
     reader: deflate::Decoder<R>,
     read_size: u32,
+    crc32: checksum::Crc32,
 }
 impl<R> Decoder<R>
     where R: io::Read
@@ -344,6 +346,7 @@ impl<R> Decoder<R>
             trailer: None,
             reader: deflate::Decoder::new(reader),
             read_size: 0,
+            crc32: checksum::Crc32::new(),
         })
     }
     pub fn header(&self) -> &Header {
@@ -364,12 +367,17 @@ impl<R> io::Read for Decoder<R>
         }
         let read_size = try!(self.reader.read(buf));
         self.read_size = self.read_size.wrapping_add(read_size as u32);
+        self.crc32.update(&buf[..read_size]);
         if read_size == 0 {
             let trailer = try!(Trailer::read_from(self.reader.as_inner_mut()));
             if trailer.input_size != self.read_size {
                 Err(invalid_data_error!("Input size mismatched: value={}, expected={}",
                                         self.read_size,
                                         trailer.input_size))
+            } else if trailer.crc != self.crc32.crc() {
+                Err(invalid_data_error!("CRC32 mismatched: value={}, expected={}",
+                                        self.crc32.crc(),
+                                        trailer.crc))
             } else {
                 self.trailer = Some(trailer);
                 self.read(buf)
