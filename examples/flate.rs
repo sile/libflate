@@ -72,12 +72,9 @@ fn main() {
         }
         println!("COUNT: {}", count);
     } else if let Some(_matches) = matches.subcommand_matches("gzip-decode") {
-        let mut decoder = gzip::Decoder::new(input);
+        let mut decoder = gzip::Decoder::new(input).expect("Read GZIP header failed");
         if verbose {
-            let _ = writeln!(&mut io::stderr(),
-                             "HEADER: {:?}",
-                             decoder.header().expect("Read GZIP header
-                             failed"));
+            let _ = writeln!(&mut io::stderr(), "HEADER: {:?}", decoder.header());
         }
         io::copy(&mut decoder, &mut output).expect("Decoding GZIP stream failed");
         if verbose {

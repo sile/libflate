@@ -128,7 +128,7 @@ impl Header {
         if let Some(ref x) = self.comment {
             try!(writer.write_all(x.as_bytes_with_nul()));
         }
-        if let Some(x) = self.header_crc{
+        if let Some(x) = self.header_crc {
             try!(writer.write_u16::<LittleEndian>(x));
         }
         Ok(())
@@ -139,9 +139,10 @@ impl Header {
         let mut this = Header::default();
         try!(reader.read_exact(&mut this.id));
         if this.id != GZIP_ID {
-            return invalid_data_error(&format!("Unexpected GZIP ID: value={:?}, expected={:?}",
-                                               this.id,
-                                               GZIP_ID));
+            return Err(invalid_data_error!("Unexpected GZIP ID: value={:?}, \
+                                                    expected={:?}",
+                                           this.id,
+                                           GZIP_ID));
         }
         this.compression_method = try!(CompressionMethod::read_from(&mut reader));
         this.flags = Flags::from_bits_truncate(try!(reader.read_u8()));
@@ -176,9 +177,6 @@ fn read_cstring<R>(mut reader: R) -> io::Result<CString>
         buf.push(b);
     }
 }
-fn invalid_data_error<T>(description: &str) -> io::Result<T> {
-    Err(io::Error::new(io::ErrorKind::InvalidData, description))
-}
 
 #[derive(Debug, Clone)]
 pub struct ExtraField {
@@ -208,7 +206,7 @@ impl ExtraField {
         try!(writer.write_u16::<LittleEndian>(self.data.len() as u16()));
         try!(writer.write_all(&self.data));
         Ok(())
-    }    
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -248,7 +246,7 @@ impl Os {
             Os::Qdos => OS_QDOS,
             Os::AcornRiscos => OS_ACORN_RISCOS,
             Os::Unknown => OS_UNKNOWN,
-            Os::Undefined(os) => os 
+            Os::Undefined(os) => os,
         }
     }
     pub fn write_to<W>(&self, mut writer: W) -> io::Result<()>
@@ -287,7 +285,9 @@ enum EncodePhase {
     Data,
 }
 
-pub struct Encoder<W> where W: io::Write {
+pub struct Encoder<W>
+    where W: io::Write
+{
     phase: EncodePhase,
     header: Header,
     writer: W,
@@ -313,44 +313,41 @@ impl<W> io::Write for Encoder<W>
                 self.phase = EncodePhase::Data;
                 self.write(buf)
             }
-            EncodePhase::Data => {
-                panic!()
-            }
+            EncodePhase::Data => panic!(),
         }
     }
     fn flush(&mut self) -> io::Result<()> {
         panic!()
     }
 }
-impl <W> Drop for Encoder<W> where W: io::Write {
+impl<W> Drop for Encoder<W>
+    where W: io::Write
+{
     fn drop(&mut self) {
         self.flush().unwrap();
     }
 }
 
 pub struct Decoder<R> {
-    header: Option<Header>,
+    header: Header,
     trailer: Option<Trailer>,
     reader: deflate::Decoder<R>,
+    read_size: u32,
 }
 impl<R> Decoder<R>
     where R: io::Read
 {
-    pub fn new(reader: R) -> Self {
-        Decoder {
-            header: None,
+    pub fn new(mut reader: R) -> io::Result<Self> {
+        let header = try!(Header::read_from(&mut reader));
+        Ok(Decoder {
+            header: header,
             trailer: None,
             reader: deflate::Decoder::new(reader),
-        }
+            read_size: 0,
+        })
     }
-    pub fn header(&mut self) -> io::Result<&Header> {
-        if let Some(ref header) = self.header {
-            Ok(header)
-        } else {
-            let header = try!(Header::read_from(self.reader.as_inner_mut()));
-            self.header = Some(header);
-            self.header()
-        }
+    pub fn header(&self) -> &Header {
+        &self.header
     }
     pub fn finish(mut self) -> io::Result<(R, Vec<u8>, Trailer)> {
         let mut buf = Vec::new();
@@ -362,17 +359,23 @@ impl<R> io::Read for Decoder<R>
     where R: io::Read
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.header.is_none() {
-            try!(self.header());
-        }
         if self.trailer.is_some() {
             return Ok(0);
         }
         let read_size = try!(self.reader.read(buf));
+        self.read_size = self.read_size.wrapping_add(read_size as u32);
         if read_size == 0 {
             let trailer = try!(Trailer::read_from(self.reader.as_inner_mut()));
-            self.trailer = Some(trailer);
+            if trailer.input_size != self.read_size {
+                Err(invalid_data_error!("Input size mismatched: value={}, expected={}",
+                                        self.read_size,
+                                        trailer.input_size))
+            } else {
+                self.trailer = Some(trailer);
+                self.read(buf)
+            }
+        } else {
+            Ok(read_size)
         }
-        Ok(read_size)
     }
 }

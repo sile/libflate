@@ -88,7 +88,7 @@ impl Decoder {
         let code = try!(reader.peek_bits(self.max_bitwidth));
         let value = unsafe { *self.table.get_unchecked(code as usize) };
         if value == 0 {
-            Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid huffman coded stream"))
+            Err(invalid_data_error!("Invalid huffman coded stream"))
         } else {
             let bitwidth = value & 0b1111;
             let decoded = value >> 4;

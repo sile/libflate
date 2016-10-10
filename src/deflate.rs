@@ -42,8 +42,7 @@ impl<R> Decoder<R>
         let len = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
         let nlen = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
         if !len != nlen {
-            Err(io::Error::new(io::ErrorKind::InvalidData,
-                               format!("LEN={} is not the one's complement of NLEN={}", len, nlen)))
+            Err(invalid_data_error!("LEN={} is not the one's complement of NLEN={}", len, nlen))
         } else {
             let old_len = self.buffer.len();
             self.buffer.resize(old_len + len as usize, 0);
@@ -114,10 +113,8 @@ impl<R> Decoder<R>
             16 => {
                 let count = try!(self.bit_reader.read_bits(2)) + 3;
                 let last = try!(bitwidthes.last()
-                        .cloned()
-                        .ok_or_else(|| {
-                            io::Error::new(io::ErrorKind::InvalidData, "No preceeding value")
-                        }));
+                    .cloned()
+                    .ok_or_else(|| invalid_data_error!("No preceeding value")));
                 bitwidthes.extend(iter::repeat(last).take(count as usize));
             }
             17 => {
@@ -174,10 +171,7 @@ impl<R> Read for Decoder<R>
                     try!(self.read_compressed_block(true));
                     self.read(buf)
                 }
-                0b11 => {
-                    Err(io::Error::new(io::ErrorKind::InvalidData,
-                                       "btype 0x11 of DEFLATE is reserved(error) value"))
-                }
+                0b11 => Err(invalid_data_error!("btype 0x11 of DEFLATE is reserved(error) value")),
                 _ => unreachable!(),
             }
         }
