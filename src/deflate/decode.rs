@@ -79,6 +79,7 @@ impl<R> Decoder<R>
         Ok(())
     }
     fn read_dynamic_huffman_codes(&mut self) -> io::Result<SymbolDecoder> {
+        // TODO: struct
         let literal_code_count = try!(self.bit_reader.read_bits(5)) + 257;
         let distance_code_count = try!(self.bit_reader.read_bits(5)) + 1;
         let bitwidth_code_count = try!(self.bit_reader.read_bits(4)) + 4;

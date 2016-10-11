@@ -138,12 +138,16 @@ impl EncoderBuilder {
     pub fn finish(self) -> Encoder {
         Encoder { table: self.table }
     }
+    pub fn from_frequencies(counts: &[usize], max_bitwidth: u8) -> Encoder {
+        panic!()
+    }
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Encoder {
-    table: Vec<(u8, u16)>,
+    // XXX:
+    pub table: Vec<(u8, u16)>,
 }
 impl Encoder {
     pub fn encode<W>(&mut self, writer: &mut bit::BitWriter<W>, code: u16) -> io::Result<()>
@@ -152,6 +156,13 @@ impl Encoder {
         debug_assert!(self.table[code as usize] != (0, 0));
         let (bitwidth, encoded) = self.table[code as usize];
         writer.write_bits(bitwidth, encoded)
+    }
+    pub fn used_max_code(&self) -> Option<u16> {
+        self.table
+            .iter()
+            .rev()
+            .position(|x| x.0 > 0)
+            .map(|trailing_zeros| (self.table.len() - 1 - trailing_zeros) as u16)
     }
 }
 
