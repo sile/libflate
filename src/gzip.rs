@@ -1,6 +1,5 @@
 /// https://tools.ietf.org/html/rfc1952
 use std::io;
-use std::io::Write;
 use std::ffi::CString;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
@@ -285,9 +284,7 @@ enum EncodePhase {
     Data,
 }
 
-pub struct Encoder<W>
-    where W: io::Write
-{
+pub struct Encoder<W> {
     phase: EncodePhase,
     header: Header,
     writer: W,
@@ -318,13 +315,6 @@ impl<W> io::Write for Encoder<W>
     }
     fn flush(&mut self) -> io::Result<()> {
         panic!()
-    }
-}
-impl<W> Drop for Encoder<W>
-    where W: io::Write
-{
-    fn drop(&mut self) {
-        self.flush().unwrap();
     }
 }
 

@@ -6,7 +6,7 @@ pub struct Adler32 {
 }
 impl Adler32 {
     pub fn new() -> Self {
-        Adler32 { value: 0 }
+        Adler32 { value: 1 }
     }
     pub fn value(&self) -> u32 {
         self.value

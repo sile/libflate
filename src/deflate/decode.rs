@@ -8,6 +8,7 @@ use byteorder::LittleEndian;
 
 use huffman;
 use bit::BitReader;
+use super::Symbol;
 
 const MAX_DISTANCE: usize = 0x8000;
 
@@ -252,13 +253,6 @@ impl SymbolDecoder {
         let distance = base + extra;
         Ok(distance)
     }
-}
-
-#[derive(Debug)]
-enum Symbol {
-    EndOfBlock,
-    Literal(u8),
-    Share { length: u16, distance: u16 },
 }
 
 const LENGTH_TABLE: [(u16, u8); 29] =
