@@ -1,5 +1,4 @@
 use std::io;
-use std::cmp;
 use std::iter;
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
@@ -9,6 +8,7 @@ use lz77;
 use lz77::Symbol;
 use huffman;
 use Finish;
+use super::huffman_codes;
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub enum CompressionLevel {
@@ -259,84 +259,7 @@ impl EncodeBlock for DynamicCodes {
                      -> io::Result<()>
         where W: io::Write
     {
-        struct Sym {
-            value: u8,
-            count: usize,
-        }
-
-        let literal_code_count = cmp::max(257, literal_encoder.used_max_code().unwrap_or(0) + 1);
-        let distance_code_count = cmp::max(1, distance_encoder.used_max_code().unwrap_or(0) + 1);
-
-        let mut syms: Vec<Sym> = Vec::new();
-        for &(e, size) in &[(&literal_encoder, literal_code_count),
-                            (&distance_encoder, distance_code_count)] {
-            for (i, c) in e.table.iter().take(size as usize).map(|x| x.0).enumerate() {
-                if i > 0 && syms.last().map_or(false, |s| s.value == c) {
-                    syms.last_mut().unwrap().count += 1;
-                } else {
-                    syms.push(Sym {
-                        value: c,
-                        count: 1,
-                    })
-                }
-            }
-        }
-
-        let mut codes = Vec::new();
-        for s in &syms {
-            if s.value == 0 {
-                let mut c = s.count;
-                while c >= 11 {
-                    let n = cmp::min(138, c);
-                    codes.push((18, 7, n - 11));
-                    c -= n;
-                }
-                if c >= 3 {
-                    codes.push((17, 3, c - 3));
-                    c = 0;
-                }
-                for _ in 0..c {
-                    codes.push((0, 0, 0));
-                }
-            } else {
-                codes.push((s.value, 0, 0));
-                let mut c = s.count - 1;
-                while c >= 3 {
-                    let n = cmp::min(6, c);
-                    codes.push((16, 2, n - 3));
-                    c -= n;
-                }
-                for _ in 0..c {
-                    codes.push((s.value, 0, 0));
-                }
-            }
-        }
-
-        let mut code_counts = [0; 19];
-        for x in &codes {
-            code_counts[x.0 as usize] += 1;
-        }
-        let mut bitwidth_encoder = huffman::EncoderBuilder::from_frequencies(&code_counts, 7);
-        let indices = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
-        let bitwidth_code_count =
-            cmp::max(4,
-                     indices.iter()
-                         .rev()
-                         .position(|&i| bitwidth_encoder.table[i].0 > 0)
-                         .map_or(0, |trailing_zeros| 19 - trailing_zeros)) as u16;
-        try!(writer.write_bits(5, literal_code_count - 257));
-        try!(writer.write_bits(5, distance_code_count - 1));
-        try!(writer.write_bits(4, bitwidth_code_count - 4));
-        for &i in indices.iter().take(bitwidth_code_count as usize) {
-            try!(writer.write_bits(3, bitwidth_encoder.table[i].0 as u16));
-        }
-        for &(code, bits, extra) in &codes {
-            try!(bitwidth_encoder.encode(writer, code as u16));
-            if bits > 0 {
-                try!(writer.write_bits(bits, extra as u16));
-            }
-        }
-        Ok(())
+        huffman_codes::save_dynamic_codes(writer, literal_encoder, distance_encoder)
     }
 }
 
@@ -347,28 +270,10 @@ struct FixedCodes {
 }
 impl FixedCodes {
     fn new() -> Self {
-        let mut literal_builder = huffman::EncoderBuilder::new(287);
-        for i in 0..144 {
-            literal_builder.set_mapping(8, i, 0b0011_0000 + i);
-        }
-        for i in 144..256 {
-            literal_builder.set_mapping(9, i, 0b1_1001_0000 + i - 144);
-        }
-        for i in 256..280 {
-            literal_builder.set_mapping(7, i, 0b000_0000 + i - 256);
-        }
-        for i in 280..287 {
-            literal_builder.set_mapping(8, i, 0b1100_0000 + i - 280);
-        }
-
-        let mut distance_builder = huffman::EncoderBuilder::new(30);
-        for i in 0..30 {
-            distance_builder.set_mapping(5, i, i);
-        }
-
+        let (literal_encoder, distance_encoder) = huffman_codes::fixed_encoders();
         FixedCodes {
-            literal_encoder: literal_builder.finish(),
-            distance_encoder: distance_builder.finish(),
+            literal_encoder: literal_encoder,
+            distance_encoder: distance_encoder,
         }
     }
 }

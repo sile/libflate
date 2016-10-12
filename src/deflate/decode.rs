@@ -2,13 +2,13 @@ use std::io;
 use std::io::Read;
 use std::cmp;
 use std::ptr;
-use std::iter;
 use byteorder::ReadBytesExt;
 use byteorder::LittleEndian;
 
 use huffman;
 use bit::BitReader;
 use lz77::Symbol;
+use super::huffman_codes;
 
 const MAX_DISTANCE: usize = 0x8000;
 
@@ -79,58 +79,8 @@ impl<R> Decoder<R>
         Ok(())
     }
     fn read_dynamic_huffman_codes(&mut self) -> io::Result<SymbolDecoder> {
-        // TODO: struct
-        let literal_code_count = try!(self.bit_reader.read_bits(5)) + 257;
-        let distance_code_count = try!(self.bit_reader.read_bits(5)) + 1;
-        let bitwidth_code_count = try!(self.bit_reader.read_bits(4)) + 4;
-
-        let mut bitwidth_code_bitwidthes = [0; 19];
-        let indices = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
-        for &i in indices.iter().take(bitwidth_code_count as usize) {
-            bitwidth_code_bitwidthes[i] = try!(self.bit_reader.read_bits(3)) as u8;
-        }
-        let mut bitwidth_decoder =
-            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes);
-
-        let mut literal_code_bitwidthes = Vec::with_capacity(literal_code_count as usize);
-        while literal_code_bitwidthes.len() < literal_code_count as usize {
-            let c = try!(bitwidth_decoder.decode(&mut self.bit_reader));
-            try!(self.decode_bitwidthes(c, &mut literal_code_bitwidthes));
-        }
-
-        let mut distance_code_bitwidthes = Vec::with_capacity(distance_code_count as usize);
-        while distance_code_bitwidthes.len() < distance_code_count as usize {
-            let c = try!(bitwidth_decoder.decode(&mut self.bit_reader));
-            try!(self.decode_bitwidthes(c, &mut distance_code_bitwidthes));
-        }
-
-        let literal_decoder = huffman::DecoderBuilder::from_bitwidthes(&literal_code_bitwidthes);
-        let distance_decoder = huffman::DecoderBuilder::from_bitwidthes(&distance_code_bitwidthes);
-        Ok(SymbolDecoder::new(literal_decoder, distance_decoder))
-    }
-    fn decode_bitwidthes(&mut self, code: u16, bitwidthes: &mut Vec<u8>) -> io::Result<()> {
-        match code {
-            0...15 => {
-                bitwidthes.push(code as u8);
-            }
-            16 => {
-                let count = try!(self.bit_reader.read_bits(2)) + 3;
-                let last = try!(bitwidthes.last()
-                    .cloned()
-                    .ok_or_else(|| invalid_data_error!("No preceeding value")));
-                bitwidthes.extend(iter::repeat(last).take(count as usize));
-            }
-            17 => {
-                let zeros = try!(self.bit_reader.read_bits(3)) + 3;
-                bitwidthes.extend(iter::repeat(0).take(zeros as usize));
-            }
-            18 => {
-                let zeros = try!(self.bit_reader.read_bits(7)) + 11;
-                bitwidthes.extend(iter::repeat(0).take(zeros as usize));
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
+        huffman_codes::load_dynamic_decoders(&mut self.bit_reader)
+            .map(|(literal, distance)| SymbolDecoder::new(literal, distance))
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > MAX_DISTANCE * 4 {
@@ -193,28 +143,10 @@ impl SymbolDecoder {
         }
     }
     pub fn new_fixed() -> Self {
-        let mut literal_builder = huffman::DecoderBuilder::new(9);
-        for i in 0..144 {
-            literal_builder.set_mapping(8, 0b0011_0000 + i, i);
-        }
-        for i in 144..256 {
-            literal_builder.set_mapping(9, 0b1_1001_0000 + i - 144, i);
-        }
-        for i in 256..280 {
-            literal_builder.set_mapping(7, 0b000_0000 + i - 256, i);
-        }
-        for i in 280..287 {
-            literal_builder.set_mapping(8, 0b1100_0000 + i - 280, i);
-        }
-
-        let mut distance_builder = huffman::DecoderBuilder::new(5);
-        for i in 0..30 {
-            distance_builder.set_mapping(5, i, i);
-        }
-
+        let (literal_decoder, distance_decoder) = huffman_codes::fixed_decoders();
         SymbolDecoder {
-            literal_decoder: literal_builder.finish(),
-            distance_decoder: distance_builder.finish(),
+            literal_decoder: literal_decoder,
+            distance_decoder: distance_decoder,
         }
     }
     fn decode<R>(&mut self, reader: &mut BitReader<R>) -> io::Result<Symbol>

@@ -5,3 +5,4 @@ pub use self::encode::EncodeOptions;
 
 mod decode;
 mod encode;
+mod huffman_codes;
