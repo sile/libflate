@@ -113,6 +113,12 @@ impl Decoder {
     }
 }
 
+#[derive(Clone)]
+struct Obj {
+    codes: Vec<u16>,
+    cost: usize,
+}
+
 #[derive(Debug)]
 pub struct EncoderBuilder {
     table: Vec<(u8, u16)>,
@@ -139,7 +145,84 @@ impl EncoderBuilder {
         Encoder { table: self.table }
     }
     pub fn from_frequencies(counts: &[usize], max_bitwidth: u8) -> Encoder {
-        panic!()
+        // (defun package-and-merge (objs next-objs)
+        //   (merge 'list (packaging objs) next-objs #'< :key #'obj-cost))
+
+        // (defmacro objs-each ((obj objs) &body body)
+        //   (let ((self (gensym)))
+        //     `(labels ((,self (,obj)
+        //                 (if (packaged-obj-p ,obj)
+        //                     (progn (,self (car (packaged-obj-pair ,obj)))
+        //                            (,self (cdr (packaged-obj-pair ,obj))))
+        //                   (progn ,@body))))
+        //        (dolist (,obj ,objs)
+        //          (,self ,obj)))))
+
+        // (defun calc-code->b(#1=code-frequency-table bit-length-limit)
+        //   (let ((src-objs (sort (loop FOR i FROM 0 BELOW (length #1#)
+        //                               WHEN (plusp (aref #1# i))
+        //                               COLLECT (make-code-obj :code i :cost (aref #1# i)))
+        //                         #'< :key #'obj-cost))
+        //         (bitlen-table (make-array (length #1#) :initial-element 0 :element-type 'octet)))
+        //     (loop REPEAT bit-length-limit
+        //           FOR objs = (package-and-merge objs (copy-list src-objs))
+        //           FINALLY
+        //             (objs-each (o (packaging objs))
+        //               (incf (aref bitlen-table (code-obj-code o)))))
+        //     bitlen-table))
+        let mut src_objs = counts.iter()
+            .cloned()
+            .enumerate()
+            .filter(|x| x.1 > 0)
+            .map(|x| {
+                Obj {
+                    codes: vec![x.0 as u16],
+                    cost: x.1,
+                }
+            })
+            .collect::<Vec<_>>();
+        src_objs.sort_by_key(|o| o.cost);
+        let mut bitlen_table = vec![0; counts.len()];
+        let mut objs = Vec::new();
+        for _ in 0..max_bitwidth {
+            objs = Self::package_and_merge(objs, src_objs.clone());
+        }
+        for code in Self::packaging(objs).into_iter().flat_map(|o| o.codes.into_iter()) {
+            bitlen_table[code as usize] += 1;
+        }
+        Self::from_bitwidthes(&bitlen_table)
+    }
+    fn package_and_merge(objs: Vec<Obj>, src_objs: Vec<Obj>) -> Vec<Obj> {
+        objs
+    }
+    fn packaging(objs: Vec<Obj>) -> Vec<Obj> {
+        objs
+    }
+    pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
+        debug_assert!(bitwidthes.len() > 0);
+
+        // NOTE: Canonical Huffman Code
+        let mut codes = Vec::new();
+        for (code, count) in bitwidthes.iter().cloned().enumerate() {
+            if count == 0 {
+                continue;
+            }
+            codes.push((code as u16, count));
+        }
+        codes.sort_by_key(|x| x.1);
+
+        let mut builder = Self::new(codes.len());
+        let mut to = 0;
+        let mut prev_count = 0;
+        for (code, count) in codes {
+            if prev_count != count {
+                to <<= count - prev_count;
+                prev_count = count;
+            }
+            builder.set_mapping(count, code, to);
+            to += 1;
+        }
+        builder.finish()
     }
 }
 
