@@ -36,6 +36,7 @@ fn main() {
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .subcommand(SubCommand::with_name("zlib-decode"))
+        .subcommand(SubCommand::with_name("zlib-encode"))
         .get_matches();
 
     let input_filename = matches.value_of("INPUT").unwrap();
@@ -80,14 +81,19 @@ fn main() {
         }
         io::copy(&mut decoder, &mut output).expect("Decoding GZIP stream failed");
     } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
-        let mut encoder = gzip::Encoder::new(output);
+        let mut encoder = gzip::Encoder::new(output).unwrap();
         io::copy(&mut input, &mut encoder).expect("Encoding GZIP stream failed");
+        encoder.finish().result().unwrap();
     } else if let Some(_matches) = matches.subcommand_matches("zlib-decode") {
         let mut decoder = zlib::Decoder::new(input).expect("Read ZLIB header failed");
         if verbose {
             let _ = writeln!(&mut io::stderr(), "HEADER: {:?}", decoder.header());
         }
         io::copy(&mut decoder, &mut output).expect("Decoding ZLIB stream failed");
+    } else if let Some(_matches) = matches.subcommand_matches("zlib-encode") {
+        let mut encoder = zlib::Encoder::new(output).unwrap();
+        io::copy(&mut input, &mut encoder).expect("Encoding ZLIB stream failed");
+        encoder.finish().result().unwrap();
     } else {
         println!("{}", matches.usage());
         process::exit(1);

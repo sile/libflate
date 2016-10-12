@@ -5,6 +5,13 @@ libflate
 
 A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
 
+Example
+-------
+
+```bash
+$ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
+```
+
 References
 ----------
 

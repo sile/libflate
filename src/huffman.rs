@@ -2,6 +2,7 @@
 ///
 /// Reference: https://www.ics.uci.edu/~dan/pubs/LenLimHuff.pdf
 use std::io;
+use std::cmp;
 
 use bit;
 use bit::BitReader;
@@ -113,7 +114,7 @@ impl Decoder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 struct Obj {
     codes: Vec<u16>,
     cost: usize,
@@ -145,31 +146,7 @@ impl EncoderBuilder {
         Encoder { table: self.table }
     }
     pub fn from_frequencies(counts: &[usize], max_bitwidth: u8) -> Encoder {
-        // (defun package-and-merge (objs next-objs)
-        //   (merge 'list (packaging objs) next-objs #'< :key #'obj-cost))
-
-        // (defmacro objs-each ((obj objs) &body body)
-        //   (let ((self (gensym)))
-        //     `(labels ((,self (,obj)
-        //                 (if (packaged-obj-p ,obj)
-        //                     (progn (,self (car (packaged-obj-pair ,obj)))
-        //                            (,self (cdr (packaged-obj-pair ,obj))))
-        //                   (progn ,@body))))
-        //        (dolist (,obj ,objs)
-        //          (,self ,obj)))))
-
-        // (defun calc-code->b(#1=code-frequency-table bit-length-limit)
-        //   (let ((src-objs (sort (loop FOR i FROM 0 BELOW (length #1#)
-        //                               WHEN (plusp (aref #1# i))
-        //                               COLLECT (make-code-obj :code i :cost (aref #1# i)))
-        //                         #'< :key #'obj-cost))
-        //         (bitlen-table (make-array (length #1#) :initial-element 0 :element-type 'octet)))
-        //     (loop REPEAT bit-length-limit
-        //           FOR objs = (package-and-merge objs (copy-list src-objs))
-        //           FINALLY
-        //             (objs-each (o (packaging objs))
-        //               (incf (aref bitlen-table (code-obj-code o)))))
-        //     bitlen-table))
+        // TODO: save unnessary large bits
         let mut src_objs = counts.iter()
             .cloned()
             .enumerate()
@@ -193,9 +170,28 @@ impl EncoderBuilder {
         Self::from_bitwidthes(&bitlen_table)
     }
     fn package_and_merge(objs: Vec<Obj>, src_objs: Vec<Obj>) -> Vec<Obj> {
-        objs
+        // TODO: optimize merging
+        let mut v = Self::packaging(objs);
+        v.extend(src_objs);
+        v.sort_by_key(|o| o.cost);
+        v
     }
-    fn packaging(objs: Vec<Obj>) -> Vec<Obj> {
+    fn packaging(mut objs: Vec<Obj>) -> Vec<Obj> {
+        // TODO: optimize
+        if objs.len() < 2 {
+            return objs;
+        }
+        let new_len = objs.len() / 2;
+        for i in 0..new_len {
+            let mut x = objs[i * 2 + 0].clone();
+            {
+                let y = &objs[i * 2 + 1];
+                x.codes.extend(y.codes.clone());
+                x.cost += y.cost;
+            }
+            objs[i] = x;
+        }
+        objs.truncate(new_len);
         objs
     }
     pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
@@ -203,15 +199,17 @@ impl EncoderBuilder {
 
         // NOTE: Canonical Huffman Code
         let mut codes = Vec::new();
+        let mut max = 0;
         for (code, count) in bitwidthes.iter().cloned().enumerate() {
             if count == 0 {
                 continue;
             }
+            max = cmp::max(max, code);
             codes.push((code as u16, count));
         }
         codes.sort_by_key(|x| x.1);
 
-        let mut builder = Self::new(codes.len());
+        let mut builder = Self::new(max + 1);
         let mut to = 0;
         let mut prev_count = 0;
         for (code, count) in codes {
@@ -236,6 +234,7 @@ impl Encoder {
     pub fn encode<W>(&mut self, writer: &mut bit::BitWriter<W>, code: u16) -> io::Result<()>
         where W: io::Write
     {
+        debug_assert!(self.table.len() > code as usize);
         debug_assert!(self.table[code as usize] != (0, 0));
         let (bitwidth, encoded) = self.table[code as usize];
         writer.write_bits(bitwidth, encoded)

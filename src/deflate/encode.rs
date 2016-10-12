@@ -6,38 +6,67 @@ use byteorder::WriteBytesExt;
 
 use bit;
 use lz77;
+use lz77::Symbol;
 use huffman;
-use super::Symbol;
+use Finish;
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub enum Level {
+pub enum CompressionLevel {
     NoCompression,
     BestSpeed,
-    Default,
+    Balance,
     BestCompression,
 }
-impl Default for Level {
+impl Default for CompressionLevel {
     fn default() -> Self {
-        Level::Default
+        CompressionLevel::Balance
     }
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub struct Options {
-    pub level: Level,
-    pub lz77_window_size: u16,
+pub struct EncodeOptions {
+    level: CompressionLevel,
+    lz77_window_size: u16,
 }
-impl Default for Options {
+impl Default for EncodeOptions {
     fn default() -> Self {
-        Options {
-            level: Level::default(),
+        EncodeOptions {
+            level: CompressionLevel::default(),
             lz77_window_size: 0x8000,
         }
     }
 }
-impl Options {
+impl EncodeOptions {
     pub fn new() -> Self {
-        Options::default()
+        EncodeOptions::default()
+    }
+    pub fn get_level(&self) -> CompressionLevel {
+        self.level.clone()
+    }
+    pub fn get_window_size(&self) -> u16 {
+        self.lz77_window_size
+    }
+    pub fn level(&mut self, level: CompressionLevel) -> &mut Self {
+        self.level = level;
+        self
+    }
+    pub fn no_compression(&mut self) -> &mut Self {
+        self.level(CompressionLevel::NoCompression)
+    }
+    pub fn best_speed(&mut self) -> &mut Self {
+        self.level(CompressionLevel::BestSpeed)
+    }
+    pub fn best_compression(&mut self) -> &mut Self {
+        self.level(CompressionLevel::BestCompression)
+    }
+    pub fn window_size(&mut self, size: u16) -> &mut Self {
+        self.lz77_window_size = size;
+        self
+    }
+    pub fn encoder<W>(&self, inner: W) -> Encoder<W>
+        where W: io::Write
+    {
+        Encoder::with_options(inner, self.clone())
     }
 }
 
@@ -122,7 +151,7 @@ struct HuffmanBlock<H> {
 impl<H> HuffmanBlock<H>
     where H: EncodeBlock
 {
-    fn new(huffman: H, options: &Options) -> Self {
+    fn new(huffman: H, options: &EncodeOptions) -> Self {
         HuffmanBlock {
             lz77_buf: lz77::Encoder::new(options.lz77_window_size),
             huffman: huffman,
@@ -158,7 +187,7 @@ impl<H> HuffmanBlock<H>
         where W: io::Write
     {
         try!(writer.write_bit(is_last));
-        try!(writer.write_bits(2, 0b01));
+        try!(writer.write_bits(2, self.huffman.mode() as u16));
         try!(self.huffman.encode_block(writer, &self.lz77_buf.as_slice()[..size]));
         Ok(())
     }
@@ -187,10 +216,11 @@ trait EncodeBlock {
         }
         Ok(())
     }
+    fn mode(&self) -> u8;
     fn save_codes<W>(&mut self,
-                     writer: &mut bit::BitWriter<W>,
-                     literal_encoder: &huffman::Encoder,
-                     distance_encoder: &huffman::Encoder)
+                     _writer: &mut bit::BitWriter<W>,
+                     _literal_encoder: &huffman::Encoder,
+                     _distance_encoder: &huffman::Encoder)
                      -> io::Result<()>
         where W: io::Write
     {
@@ -218,6 +248,9 @@ impl EncodeBlock for DynamicCodes {
         }
         (huffman::EncoderBuilder::from_frequencies(&literal_counts, 15),
          huffman::EncoderBuilder::from_frequencies(&distance_counts, 15))
+    }
+    fn mode(&self) -> u8 {
+        0b10
     }
     fn save_codes<W>(&mut self,
                      writer: &mut bit::BitWriter<W>,
@@ -284,7 +317,6 @@ impl EncodeBlock for DynamicCodes {
             code_counts[x.0 as usize] += 1;
         }
         let mut bitwidth_encoder = huffman::EncoderBuilder::from_frequencies(&code_counts, 7);
-
         let indices = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
         let bitwidth_code_count =
             cmp::max(4,
@@ -292,7 +324,6 @@ impl EncodeBlock for DynamicCodes {
                          .rev()
                          .position(|&i| bitwidth_encoder.table[i].0 > 0)
                          .map_or(0, |trailing_zeros| 19 - trailing_zeros)) as u16;
-
         try!(writer.write_bits(5, literal_code_count - 257));
         try!(writer.write_bits(5, distance_code_count - 1));
         try!(writer.write_bits(4, bitwidth_code_count - 4));
@@ -345,27 +376,30 @@ impl EncodeBlock for FixedCodes {
     fn get_encoders(&mut self, _block: &[Symbol]) -> (huffman::Encoder, huffman::Encoder) {
         (self.literal_encoder.clone(), self.distance_encoder.clone())
     }
+    fn mode(&self) -> u8 {
+        0b01
+    }
 }
 
 #[derive(Debug)]
 pub struct Encoder<W> {
     writer: bit::BitWriter<W>,
     block: Block,
-    options: Options,
+    options: EncodeOptions,
 }
 impl<W> Encoder<W>
     where W: io::Write
 {
     pub fn new(inner: W) -> Self {
-        Self::with_options(inner, Options::default())
+        Self::with_options(inner, EncodeOptions::default())
     }
-    pub fn with_options(inner: W, options: Options) -> Self {
+    pub fn with_options(inner: W, options: EncodeOptions) -> Self {
         let block = match options.level {
-            Level::NoCompression => Block::Raw(RawBlock::new()),
-            Level::BestSpeed => Block::Fixed(HuffmanBlock::new(FixedCodes::new(), &options)),
-            Level::Default | Level::BestCompression => {
-                Block::Dynamic(HuffmanBlock::new(DynamicCodes::new(), &options))
+            CompressionLevel::NoCompression => Block::Raw(RawBlock::new()),
+            CompressionLevel::BestSpeed => {
+                Block::Fixed(HuffmanBlock::new(FixedCodes::new(), &options))
             }
+            _ => Block::Dynamic(HuffmanBlock::new(DynamicCodes::new(), &options)),
         };
         Encoder {
             writer: bit::BitWriter::new(inner),
@@ -382,10 +416,10 @@ impl<W> Encoder<W>
     pub fn into_inner(self) -> W {
         self.writer.into_inner()
     }
-    pub fn finish(mut self) -> Result<W, (W, io::Error)> {
+    pub fn finish(mut self) -> Finish<W> {
         match self.block.finish(&mut self.writer) {
-            Ok(_) => Ok(self.writer.into_inner()),
-            Err(e) => Err((self.writer.into_inner(), e)),
+            Ok(_) => Finish::new(self.writer.into_inner(), None),
+            Err(e) => Finish::new(self.writer.into_inner(), Some(e)),
         }
     }
 }

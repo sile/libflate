@@ -8,7 +8,7 @@ use byteorder::LittleEndian;
 
 use huffman;
 use bit::BitReader;
-use super::Symbol;
+use lz77::Symbol;
 
 const MAX_DISTANCE: usize = 0x8000;
 

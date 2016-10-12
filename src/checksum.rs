@@ -30,6 +30,9 @@ impl Crc32 {
     pub fn new() -> Self {
         Crc32 { value: 0 }
     }
+    pub fn value(&self) -> u32 {
+        self.value
+    }
     pub fn update(&mut self, buf: &[u8]) {
         let c = buf.iter().fold(!self.value, |c, &b| {
             let i = (c ^ b as u32) as u8 as usize;
@@ -37,13 +40,9 @@ impl Crc32 {
         });
         self.value = !c;
     }
-    pub fn crc(&self) -> u32 {
-        self.value
-    }
 }
 
 /// See the second appendix of [RFC-1952](https://tools.ietf.org/html/rfc1952).
-/// ```
 const CRC32_TABLE: [u32; 256] =
     [0x0, 0x77073096, 0xEE0E612C, 0x990951BA, 0x76DC419, 0x706AF48F, 0xE963A535, 0x9E6495A3,
      0xEDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988, 0x9B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91,
@@ -81,3 +80,22 @@ const CRC32_TABLE: [u32; 256] =
      0x30B5FFE9, 0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693,
      0x54DE5729, 0x23D967BF, 0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37,
      0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D];
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn crc32_works() {
+        let mut crc32 = Crc32::new();
+        crc32.update(b"abcde");
+        assert_eq!(crc32.value(), 0x8587D865);
+    }
+
+    #[test]
+    fn adler32_works() {
+        let mut adler32 = Adler32::new();
+        adler32.update(b"abcde");
+        assert_eq!(adler32.value(), 0x05C801F0);
+    }
+}
