@@ -392,11 +392,6 @@ impl EncodeOptions<lz77::DefaultEncoder> {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn no_compression(mut self) -> Self {
-        self.options = self.options.no_compression();
-        self.header.compression_level = CompressionLevel::Unknown;
-        self
-    }
 }
 impl<E> EncodeOptions<E>
     where E: lz77::Encode
@@ -408,6 +403,11 @@ impl<E> EncodeOptions<E>
             header: header,
             options: deflate::EncodeOptions::with_lz77(lz77),
         }
+    }
+    pub fn no_compression(mut self) -> Self {
+        self.options = self.options.no_compression();
+        self.header.compression_level = CompressionLevel::Unknown;
+        self
     }
     pub fn header(mut self, header: Header) -> Self {
         self.header = header;

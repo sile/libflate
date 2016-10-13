@@ -109,13 +109,14 @@ impl Builder for DecoderBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct Decoder {
     table: Vec<u16>,
     eob_bitwidth: u8,
     max_bitwidth: u8,
 }
 impl Decoder {
-    pub fn decode<R>(&mut self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
+    pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
         where R: io::Read
     {
         let code = try!(reader.peek_bits(self.eob_bitwidth));
@@ -173,7 +174,7 @@ pub struct Encoder {
     table: Vec<Code>,
 }
 impl Encoder {
-    pub fn encode<W>(&mut self, writer: &mut bit::BitWriter<W>, symbol: u16) -> io::Result<()>
+    pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: u16) -> io::Result<()>
         where W: io::Write
     {
         let code = self.lookup(symbol);

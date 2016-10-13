@@ -6,8 +6,7 @@ use byteorder::WriteBytesExt;
 use bit;
 use lz77;
 use finish::Finish;
-use super::codes;
-use super::Symbol;
+use super::symbol;
 use super::BlockType;
 
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
@@ -15,8 +14,8 @@ const MAX_NON_COMPRESSED_BLOCK_SIZE: usize = 0xFFFF;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EncodeOptions<E = lz77::DefaultEncoder> {
-    block_size: usize, // XXX:
-    with_dynamic_huffman: bool,
+    block_size: usize,
+    dynamic_huffman: bool,
     lz77: Option<E>,
 }
 impl Default for EncodeOptions<lz77::DefaultEncoder> {
@@ -28,13 +27,9 @@ impl EncodeOptions<lz77::DefaultEncoder> {
     pub fn new() -> Self {
         EncodeOptions {
             block_size: DEFAULT_BLOCK_SIZE,
-            with_dynamic_huffman: true,
+            dynamic_huffman: true,
             lz77: Some(lz77::DefaultEncoder),
         }
-    }
-    pub fn no_compression(mut self) -> Self {
-        self.lz77 = None;
-        self
     }
 }
 impl<E> EncodeOptions<E>
@@ -43,26 +38,30 @@ impl<E> EncodeOptions<E>
     pub fn with_lz77(lz77: E) -> Self {
         EncodeOptions {
             block_size: DEFAULT_BLOCK_SIZE,
-            with_dynamic_huffman: true,
+            dynamic_huffman: true,
             lz77: Some(lz77),
         }
+    }
+    pub fn no_compression(mut self) -> Self {
+        self.lz77 = None;
+        self
     }
     pub fn block_size(mut self, size: usize) -> Self {
         self.block_size = size;
         self
     }
     pub fn dynamic_huffman_codes(mut self) -> Self {
-        self.with_dynamic_huffman = true;
+        self.dynamic_huffman = true;
         self
     }
     pub fn fixed_huffman_codes(mut self) -> Self {
-        self.with_dynamic_huffman = false;
+        self.dynamic_huffman = false;
         self
     }
     fn get_block_type(&self) -> BlockType {
         if self.lz77.is_none() {
             BlockType::Raw
-        } else if self.with_dynamic_huffman {
+        } else if self.dynamic_huffman {
             BlockType::Dynamic
         } else {
             BlockType::Fixed
@@ -141,7 +140,7 @@ impl<E> Block<E>
         Block {
             block_type: options.get_block_type(),
             block_size: options.get_block_size(),
-            block_buf: BlockBuf::new(options.lz77, options.with_dynamic_huffman),
+            block_buf: BlockBuf::new(options.lz77, options.dynamic_huffman),
         }
     }
     fn write<W>(&mut self, writer: &mut bit::BitWriter<W>, buf: &[u8]) -> io::Result<()>
@@ -169,8 +168,8 @@ impl<E> Block<E>
 #[derive(Debug)]
 enum BlockBuf<E> {
     Raw(RawBuf),
-    Fixed(CompressBuf<codes::Fixed, E>),
-    Dynamic(CompressBuf<codes::Dynamic, E>),
+    Fixed(CompressBuf<symbol::FixedHuffmanCodec, E>),
+    Dynamic(CompressBuf<symbol::DynamicHuffmanCodec, E>),
 }
 impl<E> BlockBuf<E>
     where E: lz77::Encode
@@ -178,9 +177,9 @@ impl<E> BlockBuf<E>
     fn new(lz77: Option<E>, dynamic: bool) -> Self {
         if let Some(lz77) = lz77 {
             if dynamic {
-                BlockBuf::Dynamic(CompressBuf::new(codes::Dynamic, lz77))
+                BlockBuf::Dynamic(CompressBuf::new(symbol::DynamicHuffmanCodec, lz77))
             } else {
-                BlockBuf::Fixed(CompressBuf::new(codes::Fixed, lz77))
+                BlockBuf::Fixed(CompressBuf::new(symbol::FixedHuffmanCodec, lz77))
             }
         } else {
             BlockBuf::Raw(RawBuf::new())
@@ -242,11 +241,11 @@ impl RawBuf {
 struct CompressBuf<H, E> {
     huffman: H,
     lz77: E,
-    buf: Vec<Symbol>,
+    buf: Vec<symbol::Symbol>,
     original_size: usize,
 }
 impl<H, E> CompressBuf<H, E>
-    where H: codes::Factory,
+    where H: symbol::HuffmanCodec,
           E: lz77::Encode
 {
     fn new(huffman: H, lz77: E) -> Self {
@@ -259,7 +258,7 @@ impl<H, E> CompressBuf<H, E>
     }
     fn append(&mut self, buf: &[u8]) {
         self.original_size += buf.len();
-        self.lz77.encode(buf, Symbol::from, &mut self.buf);
+        self.lz77.encode(buf, &mut self.buf);
     }
     fn len(&self) -> usize {
         self.original_size
@@ -267,22 +266,29 @@ impl<H, E> CompressBuf<H, E>
     fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
         where W: io::Write
     {
-        self.buf.push(Symbol::EndOfBlock);
-        let mut codes = self.huffman.build_codes(&self.buf);
-        try!(self.huffman.save(writer, &codes));
+        self.lz77.flush(&mut self.buf);
+        self.buf.push(symbol::Symbol::EndOfBlock);
+        let symbol_encoder = self.huffman.build(&self.buf);
+        try!(self.huffman.save(writer, &symbol_encoder));
         for s in self.buf.drain(..) {
-            try!(codes.literal.encode(writer, s.code()));
-            if let Some((bits, extra)) = s.extra_lengh() {
-                try!(writer.write_bits(bits, extra));
-            }
-            if let Some((code, bits, extra)) = s.distance() {
-                try!(codes.distance.encode(writer, code as u16));
-                if bits > 0 {
-                    try!(writer.write_bits(bits, extra));
-                }
-            }
+            try!(symbol_encoder.encode(writer, s));
         }
         self.original_size = 0;
         Ok(())
+    }
+}
+
+impl lz77::Sink for Vec<symbol::Symbol> {
+    fn consume(&mut self, code: lz77::Code) {
+        let symbol = match code {
+            lz77::Code::Literal(b) => symbol::Symbol::Literal(b),
+            lz77::Code::Pointer { length, backward_distance } => {
+                symbol::Symbol::Share {
+                    length: length,
+                    distance: backward_distance,
+                }
+            }
+        };
+        self.push(From::from(symbol));
     }
 }

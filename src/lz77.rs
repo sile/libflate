@@ -24,9 +24,21 @@ impl Code {
     }
 }
 
+pub trait Sink {
+    fn consume(&mut self, code: Code);
+}
+impl<'a, T> Sink for &'a mut T
+    where T: Sink
+{
+    fn consume(&mut self, code: Code) {
+        (*self).consume(code);
+    }
+}
+
 // TODO: Lz77 or Lz77Encode or Lz77Compress
 pub trait Encode {
-    fn encode<F, T>(&mut self, input: &[u8], convert: F, output: &mut Vec<T>) where F: Fn(Code) -> T;
+    fn encode<S>(&mut self, buf: &[u8], sink: S) where S: Sink;
+    fn flush<S>(&mut self, sink: S) where S: Sink;
     fn compression_mode(&self) -> CompressionMode {
         CompressionMode::default()
     }
@@ -52,9 +64,13 @@ impl Default for CompressionMode {
 #[derive(Debug, Clone, Default)]
 pub struct DefaultEncoder;
 impl Encode for DefaultEncoder {
-    fn encode<F, T>(&mut self, input: &[u8], convert: F, output: &mut Vec<T>)
-        where F: Fn(Code) -> T
+    fn encode<S>(&mut self, buf: &[u8], mut sink: S)
+        where S: Sink
     {
-        output.extend(input.iter().cloned().map(Code::Literal).map(convert));
+        for c in buf.iter().cloned().map(Code::Literal) {
+            sink.consume(c);
+        }
     }
+    #[allow(unused_variables)]
+    fn flush<S>(&mut self, sink: S) where S: Sink {}
 }
