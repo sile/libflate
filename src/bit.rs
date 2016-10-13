@@ -35,6 +35,7 @@ impl<W> BitWriter<W>
             self.buf >>= 8;
             self.end = self.end.saturating_sub(8);
         }
+        try!(self.inner.flush());
         Ok(())
     }
     fn flush_if_needed(&mut self) -> io::Result<()> {

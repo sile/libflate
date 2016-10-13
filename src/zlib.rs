@@ -4,29 +4,27 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 
+use lz77;
 use deflate;
 use checksum;
-use Finish;
-
-pub type EncodeOptions = deflate::EncodeOptions;
-pub use deflate::CompressionLevel as DeflateCompressionLevel;
+use finish::Finish;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub enum ZlibCompressionLevel {
+pub enum CompressionLevel {
     Fastest = 0,
     Fast = 1,
     Default = 2,
     Slowest = 3,
 }
-impl ZlibCompressionLevel {
+impl CompressionLevel {
     fn from_u2(level: u8) -> Self {
         match level {
-            0 => ZlibCompressionLevel::Fastest,
-            1 => ZlibCompressionLevel::Fast,
-            2 => ZlibCompressionLevel::Default,
-            3 => ZlibCompressionLevel::Slowest,
+            0 => CompressionLevel::Fastest,
+            1 => CompressionLevel::Fast,
+            2 => CompressionLevel::Default,
+            3 => CompressionLevel::Slowest,
             _ => unreachable!(),
         }
     }
@@ -34,18 +32,13 @@ impl ZlibCompressionLevel {
         self.clone() as u8
     }
 }
-impl Default for ZlibCompressionLevel {
-    fn default() -> Self {
-        ZlibCompressionLevel::Default
-    }
-}
-impl From<DeflateCompressionLevel> for ZlibCompressionLevel {
-    fn from(f: DeflateCompressionLevel) -> Self {
+impl From<lz77::CompressionMode> for CompressionLevel {
+    fn from(f: lz77::CompressionMode) -> Self {
         match f {
-            DeflateCompressionLevel::NoCompression => ZlibCompressionLevel::Fastest,
-            DeflateCompressionLevel::BestSpeed => ZlibCompressionLevel::Fast,
-            DeflateCompressionLevel::Balance => ZlibCompressionLevel::Default,
-            DeflateCompressionLevel::BestCompression => ZlibCompressionLevel::Slowest,
+            lz77::CompressionMode::NoCompression => CompressionLevel::Fastest,
+            lz77::CompressionMode::BestSpeed => CompressionLevel::Fast,
+            lz77::CompressionMode::Balance => CompressionLevel::Default,
+            lz77::CompressionMode::BestCompression => CompressionLevel::Slowest,
         }
     }
 }
@@ -60,11 +53,6 @@ pub enum Lz77WindowSize {
     KB8 = 5,
     KB16 = 6,
     KB32 = 7,
-}
-impl Default for Lz77WindowSize {
-    fn default() -> Self {
-        Lz77WindowSize::KB32
-    }
 }
 impl Lz77WindowSize {
     fn from_u4(compression_info: u8) -> Option<Self> {
@@ -85,19 +73,19 @@ impl Lz77WindowSize {
     }
     pub fn from_u16(size: u16) -> Self {
         use self::Lz77WindowSize::*;
-        if 32768 <= size {
+        if 16384 < size {
             KB32
-        } else if 16384 <= size {
+        } else if 8192 < size {
             KB16
-        } else if 8192 <= size {
+        } else if 4096 < size {
             KB8
-        } else if 4096 <= size {
+        } else if 2048 < size {
             KB4
-        } else if 2048 <= size {
+        } else if 1024 < size {
             KB2
-        } else if 1024 <= size {
+        } else if 512 < size {
             KB1
-        } else if 512 <= size {
+        } else if 256 < size {
             B512
         } else {
             B256
@@ -118,17 +106,25 @@ impl Lz77WindowSize {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
     window_size: Lz77WindowSize,
-    compression_level: ZlibCompressionLevel,
+    compression_level: CompressionLevel,
 }
 impl Header {
     pub fn window_size(&self) -> Lz77WindowSize {
         self.window_size.clone()
     }
-    pub fn compression_level(&self) -> ZlibCompressionLevel {
+    pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level.clone()
+    }
+    fn from_lz77<E>(lz77: &E) -> Self
+        where E: lz77::Encode
+    {
+        Header {
+            compression_level: From::from(lz77.compression_mode()),
+            window_size: Lz77WindowSize::from_u16(lz77.window_size()),
+        }
     }
     fn read_from<R>(mut reader: R) -> io::Result<Self>
         where R: io::Read
@@ -161,7 +157,7 @@ impl Header {
                                             dictionary_id=0x{:X}",
                                            dictionary_id));
         }
-        let compression_level = ZlibCompressionLevel::from_u2(flg >> 6);
+        let compression_level = CompressionLevel::from_u2(flg >> 6);
         Ok(Header {
             window_size: window_size,
             compression_level: compression_level,
@@ -179,14 +175,6 @@ impl Header {
         try!(writer.write_u8(cmf));
         try!(writer.write_u8(flg));
         Ok(())
-    }
-}
-impl From<EncodeOptions> for Header {
-    fn from(f: EncodeOptions) -> Self {
-        Header {
-            compression_level: From::from(f.get_level().clone()),
-            window_size: Lz77WindowSize::from_u16(f.get_window_size()),
-        }
     }
 }
 
@@ -243,23 +231,75 @@ impl<R> io::Read for Decoder<R>
 }
 
 #[derive(Debug)]
-pub struct Encoder<W> {
+pub struct EncodeOptions<E>
+    where E: lz77::Encode
+{
     header: Header,
-    writer: deflate::Encoder<W>,
+    options: deflate::EncodeOptions<E>,
+}
+impl Default for EncodeOptions<lz77::DefaultEncoder> {
+    fn default() -> Self {
+        EncodeOptions {
+            header: Header::from_lz77(&lz77::DefaultEncoder),
+            options: Default::default(),
+        }
+    }
+}
+impl EncodeOptions<lz77::DefaultEncoder> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn no_compression(mut self) -> Self {
+        self.options = self.options.no_compression();
+        self.header.compression_level = CompressionLevel::Fastest;
+        self
+    }
+}
+impl<E> EncodeOptions<E>
+    where E: lz77::Encode
+{
+    pub fn with_lz77(lz77: E) -> Self {
+        EncodeOptions {
+            header: Header::from_lz77(&lz77),
+            options: deflate::EncodeOptions::with_lz77(lz77),
+        }
+    }
+    pub fn block_size(mut self, size: usize) -> Self {
+        self.options = self.options.block_size(size);
+        self
+    }
+    pub fn dynamic_huffman_codes(mut self) -> Self {
+        self.options = self.options.dynamic_huffman_codes();
+        self
+    }
+    pub fn fixed_huffman_codes(mut self) -> Self {
+        self.options = self.options.fixed_huffman_codes();
+        self
+    }
+}
+
+#[derive(Debug)]
+pub struct Encoder<W, E = lz77::DefaultEncoder> {
+    header: Header,
+    writer: deflate::Encoder<W, E>,
     adler32: checksum::Adler32,
 }
-impl<W> Encoder<W>
+impl<W> Encoder<W, lz77::DefaultEncoder>
     where W: io::Write
 {
     pub fn new(inner: W) -> io::Result<Self> {
-        Self::with_options(inner, &EncodeOptions::default())
+        Self::with_options(inner, EncodeOptions::default())
     }
-    pub fn with_options(mut inner: W, options: &EncodeOptions) -> io::Result<Self> {
-        let header = Header::from(options.clone());
-        try!(header.write_to(&mut inner));
+}
+impl<W, E> Encoder<W, E>
+    where W: io::Write,
+          E: lz77::Encode
+{
+    pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
+        try!(options.header.write_to(&mut inner));
         Ok(Encoder {
-            header: header,
-            writer: options.encoder(inner),
+            header: options.header,
+            writer: deflate::Encoder::with_options(inner, options.options),
             adler32: checksum::Adler32::new(),
         })
     }
@@ -305,7 +345,11 @@ mod test {
         let encoded = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28,
                        73, 4, 62];
         let mut decoder = Decoder::new(io::Cursor::new(&encoded)).unwrap();
-        assert_eq!(*decoder.header(), Header::default());
+        assert_eq!(*decoder.header(),
+                   Header {
+                       window_size: Lz77WindowSize::KB32,
+                       compression_level: CompressionLevel::Default,
+                   });
 
         let mut buf = Vec::new();
         io::copy(&mut decoder, &mut buf).unwrap();
@@ -326,7 +370,8 @@ mod test {
     #[test]
     fn best_speed_encode_works() {
         let plain = b"Hello World! Hello ZLIB!!";
-        let mut encoder = Encoder::with_options(Vec::new(), EncodeOptions::new().best_speed())
+        let mut encoder = Encoder::with_options(Vec::new(),
+                                                EncodeOptions::default().fixed_huffman_codes())
             .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().result().unwrap();

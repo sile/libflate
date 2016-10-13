@@ -6,9 +6,10 @@ use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use byteorder::LittleEndian;
 
+use lz77;
 use deflate;
 use checksum;
-use Finish;
+use finish::Finish;
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -36,34 +37,33 @@ const F_NAME: u8 = 0b001000;
 const F_COMMENT: u8 = 0b010000;
 
 #[derive(Debug, Clone)]
-pub enum GZipCompressionLevel {
+pub enum CompressionLevel {
     Fastest,
     Slowest,
     Unknown,
 }
-impl GZipCompressionLevel {
+impl CompressionLevel {
     fn to_u8(&self) -> u8 {
         match *self {
-            GZipCompressionLevel::Fastest => 4,
-            GZipCompressionLevel::Slowest => 2,
-            GZipCompressionLevel::Unknown => 0,
+            CompressionLevel::Fastest => 4,
+            CompressionLevel::Slowest => 2,
+            CompressionLevel::Unknown => 0,
         }
     }
     fn from_u8(x: u8) -> Self {
         match x {
-            4 => GZipCompressionLevel::Fastest,
-            2 => GZipCompressionLevel::Slowest,
-            _ => GZipCompressionLevel::Unknown,
+            4 => CompressionLevel::Fastest,
+            2 => CompressionLevel::Slowest,
+            _ => CompressionLevel::Unknown,
         }
     }
 }
-impl From<deflate::CompressionLevel> for GZipCompressionLevel {
-    fn from(f: deflate::CompressionLevel) -> Self {
+impl From<lz77::CompressionMode> for CompressionLevel {
+    fn from(f: lz77::CompressionMode) -> Self {
         match f {
-            deflate::CompressionLevel::NoCompression |
-            deflate::CompressionLevel::BestSpeed => GZipCompressionLevel::Fastest,
-            deflate::CompressionLevel::BestCompression => GZipCompressionLevel::Slowest,
-            _ => GZipCompressionLevel::Unknown,
+            lz77::CompressionMode::BestSpeed => CompressionLevel::Fastest,
+            lz77::CompressionMode::BestCompression => CompressionLevel::Slowest,
+            _ => CompressionLevel::Unknown,
         }
     }
 }
@@ -92,9 +92,61 @@ impl Trailer {
 }
 
 #[derive(Debug, Clone)]
+pub struct HeaderBuilder {
+    header: Header,
+}
+impl HeaderBuilder {
+    pub fn new() -> Self {
+        let modification_time = time::UNIX_EPOCH.elapsed().map(|d| d.as_secs() as u32).unwrap_or(0);
+        let header = Header {
+            modification_time: modification_time,
+            compression_level: CompressionLevel::Unknown,
+            os: Os::Unix,
+            is_text: false,
+            is_verified: false,
+            extra_field: None,
+            filename: None,
+            comment: None,
+        };
+        HeaderBuilder { header: header }
+    }
+    pub fn modification_time(&mut self, modification_time: u32) -> &mut Self {
+        self.header.modification_time = modification_time;
+        self
+    }
+    pub fn os(&mut self, os: Os) -> &mut Self {
+        self.header.os = os;
+        self
+    }
+    pub fn text(&mut self) -> &mut Self {
+        self.header.is_text = true;
+        self
+    }
+    pub fn verify(&mut self) -> &mut Self {
+        self.header.is_verified = true;
+        self
+    }
+    pub fn extra_field(&mut self, extra: ExtraField) -> &mut Self {
+        self.header.extra_field = Some(extra);
+        self
+    }
+    pub fn filename(&mut self, filename: CString) -> &mut Self {
+        self.header.filename = Some(filename);
+        self
+    }
+    pub fn comment(&mut self, comment: CString) -> &mut Self {
+        self.header.comment = Some(comment);
+        self
+    }
+    pub fn finish(&self) -> Header {
+        self.header.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Header {
     modification_time: u32,
-    compression_level: GZipCompressionLevel,
+    compression_level: CompressionLevel,
     os: Os,
     is_text: bool,
     is_verified: bool,
@@ -102,26 +154,11 @@ pub struct Header {
     filename: Option<CString>,
     comment: Option<CString>,
 }
-impl Default for Header {
-    fn default() -> Self {
-        let modification_time = time::UNIX_EPOCH.elapsed().map(|d| d.as_secs() as u32).unwrap_or(0);
-        Header {
-            modification_time: modification_time,
-            compression_level: GZipCompressionLevel::Unknown,
-            os: Os::Unix,
-            is_text: false,
-            is_verified: false,
-            extra_field: None,
-            filename: None,
-            comment: None,
-        }
-    }
-}
 impl Header {
     pub fn modification_time(&self) -> u32 {
         self.modification_time
     }
-    pub fn compression_level(&self) -> GZipCompressionLevel {
+    pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level.clone()
     }
     pub fn os(&self) -> Os {
@@ -187,7 +224,7 @@ impl Header {
     fn read_from<R>(mut reader: R) -> io::Result<Self>
         where R: io::Read
     {
-        let mut this = Header::default();
+        let mut this = HeaderBuilder::new().finish();
         let mut id = [0; 2];
         try!(reader.read_exact(&mut id));
         if id != GZIP_ID {
@@ -204,7 +241,7 @@ impl Header {
         }
         let flags = try!(reader.read_u8());
         this.modification_time = try!(reader.read_u32::<LittleEndian>());
-        this.compression_level = GZipCompressionLevel::from_u8(try!(reader.read_u8()));
+        this.compression_level = CompressionLevel::from_u8(try!(reader.read_u8()));
         this.os = Os::from_u8(try!(reader.read_u8()));
         if flags & F_EXTRA != 0 {
             this.extra_field = Some(try!(ExtraField::read_from(&mut reader)));
@@ -336,69 +373,84 @@ impl Os {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct EncodeOptions {
+#[derive(Debug)]
+pub struct EncodeOptions<E>
+    where E: lz77::Encode
+{
     header: Header,
-    deflate_options: deflate::EncodeOptions,
+    options: deflate::EncodeOptions<E>,
 }
-impl EncodeOptions {
+impl Default for EncodeOptions<lz77::DefaultEncoder> {
+    fn default() -> Self {
+        EncodeOptions {
+            header: HeaderBuilder::new().finish(),
+            options: Default::default(),
+        }
+    }
+}
+impl EncodeOptions<lz77::DefaultEncoder> {
     pub fn new() -> Self {
-        EncodeOptions::default()
+        Self::default()
     }
-    pub fn modification_time(&mut self, unix_time_secs: u32) -> &mut Self {
-        self.header.modification_time = unix_time_secs;
+    pub fn no_compression(mut self) -> Self {
+        self.options = self.options.no_compression();
+        self.header.compression_level = CompressionLevel::Unknown;
         self
     }
-    pub fn text(&mut self) -> &mut Self {
-        self.header.is_text = true;
+}
+impl<E> EncodeOptions<E>
+    where E: lz77::Encode
+{
+    pub fn with_lz77(lz77: E) -> Self {
+        let mut header = HeaderBuilder::new().finish();
+        header.compression_level = From::from(lz77.compression_mode());
+        EncodeOptions {
+            header: header,
+            options: deflate::EncodeOptions::with_lz77(lz77),
+        }
+    }
+    pub fn header(mut self, header: Header) -> Self {
+        self.header = header;
         self
     }
-    pub fn verify_header(&mut self) -> &mut Self {
-        self.header.is_verified = true;
+    pub fn block_size(mut self, size: usize) -> Self {
+        self.options = self.options.block_size(size);
         self
     }
-    pub fn os(&mut self, os: Os) -> &mut Self {
-        self.header.os = os;
+    pub fn dynamic_huffman_codes(mut self) -> Self {
+        self.options = self.options.dynamic_huffman_codes();
         self
     }
-    pub fn extra_field(&mut self, extra: ExtraField) -> &mut Self {
-        self.header.extra_field = Some(extra);
-        self
-    }
-    pub fn filename(&mut self, filename: CString) -> &mut Self {
-        self.header.filename = Some(filename);
-        self
-    }
-    pub fn comment(&mut self, comment: CString) -> &mut Self {
-        self.header.comment = Some(comment);
-        self
-    }
-    pub fn deflate_options(&mut self, options: deflate::EncodeOptions) -> &mut Self {
-        self.header.compression_level = From::from(options.get_level());
-        self.deflate_options = options;
+    pub fn fixed_huffman_codes(mut self) -> Self {
+        self.options = self.options.fixed_huffman_codes();
         self
     }
 }
 
-pub struct Encoder<W> {
+pub struct Encoder<W, E = lz77::DefaultEncoder> {
     header: Header,
     crc32: checksum::Crc32,
     input_size: u32,
-    writer: deflate::Encoder<W>,
+    writer: deflate::Encoder<W, E>,
 }
-impl<W> Encoder<W>
+impl<W> Encoder<W, lz77::DefaultEncoder>
     where W: io::Write
 {
     pub fn new(inner: W) -> io::Result<Self> {
-        Self::with_options(inner, &EncodeOptions::new())
+        Self::with_options(inner, EncodeOptions::new())
     }
-    pub fn with_options(mut inner: W, options: &EncodeOptions) -> io::Result<Self> {
+}
+impl<W, E> Encoder<W, E>
+    where W: io::Write,
+          E: lz77::Encode
+{
+    pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));
         Ok(Encoder {
             header: options.header.clone(),
             crc32: checksum::Crc32::new(),
             input_size: 0,
-            writer: options.deflate_options.encoder(inner),
+            writer: deflate::Encoder::with_options(inner, options.options),
         })
     }
     pub fn header(&self) -> &Header {

@@ -7,8 +7,9 @@ use byteorder::LittleEndian;
 
 use huffman;
 use bit::BitReader;
-use lz77::Symbol;
-use super::huffman_codes;
+
+use super::codes;
+use super::Symbol;
 
 const MAX_DISTANCE: usize = 0x8000;
 
@@ -79,7 +80,7 @@ impl<R> Decoder<R>
         Ok(())
     }
     fn read_dynamic_huffman_codes(&mut self) -> io::Result<SymbolDecoder> {
-        huffman_codes::load_dynamic_decoders(&mut self.bit_reader)
+        codes::load_dynamic_decoders(&mut self.bit_reader)
             .map(|(literal, distance)| SymbolDecoder::new(literal, distance))
     }
     fn truncate_old_buffer(&mut self) {
@@ -143,7 +144,7 @@ impl SymbolDecoder {
         }
     }
     pub fn new_fixed() -> Self {
-        let (literal_decoder, distance_decoder) = huffman_codes::fixed_decoders();
+        let (literal_decoder, distance_decoder) = codes::fixed_decoders();
         SymbolDecoder {
             literal_decoder: literal_decoder,
             distance_decoder: distance_decoder,
