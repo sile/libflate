@@ -19,9 +19,11 @@ impl<W> BitWriter<W>
             end: 0,
         }
     }
+    #[inline(always)]
     pub fn write_bit(&mut self, bit: bool) -> io::Result<()> {
         self.write_bits(1, bit as u16)
     }
+    #[inline(always)]
     pub fn write_bits(&mut self, bitwidth: u8, bits: u16) -> io::Result<()> {
         debug_assert!(bitwidth < 16);
         debug_assert!(self.end + bitwidth <= 32);
@@ -38,6 +40,7 @@ impl<W> BitWriter<W>
         try!(self.inner.flush());
         Ok(())
     }
+    #[inline(always)]
     fn flush_if_needed(&mut self) -> io::Result<()> {
         if self.end >= 16 {
             try!(self.inner.write_u16::<LittleEndian>(self.buf as u16));
@@ -75,15 +78,18 @@ impl<R> BitReader<R>
             offset: 32,
         }
     }
+    #[inline(always)]
     pub fn read_bit(&mut self) -> io::Result<bool> {
         self.read_bits(1).map(|b| b != 0)
     }
+    #[inline(always)]
     pub fn read_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
         self.peek_bits(bitwidth).map(|bits| {
             self.skip_bits(bitwidth);
             bits
         })
     }
+    #[inline(always)]
     pub fn peek_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
         debug_assert!(bitwidth <= 16);
         while (32 - self.offset) < bitwidth {
@@ -92,10 +98,12 @@ impl<R> BitReader<R>
         let bits = (self.last_read >> self.offset) as u16;
         Ok(bits & ((1 << bitwidth) - 1))
     }
+    #[inline(always)]
     pub fn skip_bits(&mut self, bitwidth: u8) {
         debug_assert!(32 - self.offset >= bitwidth);
         self.offset += bitwidth;
     }
+    #[inline(always)]
     fn fill_next_u8(&mut self) -> io::Result<()> {
         self.offset -= 8;
         self.last_read >>= 8;
