@@ -375,12 +375,12 @@ impl Os {
 
 #[derive(Debug)]
 pub struct EncodeOptions<E>
-    where E: lz77::Encode
+    where E: lz77::Lz77Encode
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
 }
-impl Default for EncodeOptions<lz77::DefaultEncoder> {
+impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     fn default() -> Self {
         EncodeOptions {
             header: HeaderBuilder::new().finish(),
@@ -388,13 +388,13 @@ impl Default for EncodeOptions<lz77::DefaultEncoder> {
         }
     }
 }
-impl EncodeOptions<lz77::DefaultEncoder> {
+impl EncodeOptions<lz77::DefaultLz77Encoder> {
     pub fn new() -> Self {
         Self::default()
     }
 }
 impl<E> EncodeOptions<E>
-    where E: lz77::Encode
+    where E: lz77::Lz77Encode
 {
     pub fn with_lz77(lz77: E) -> Self {
         let mut header = HeaderBuilder::new().finish();
@@ -427,13 +427,13 @@ impl<E> EncodeOptions<E>
     }
 }
 
-pub struct Encoder<W, E = lz77::DefaultEncoder> {
+pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
     crc32: checksum::Crc32,
     input_size: u32,
     writer: deflate::Encoder<W, E>,
 }
-impl<W> Encoder<W, lz77::DefaultEncoder>
+impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     where W: io::Write
 {
     pub fn new(inner: W) -> io::Result<Self> {
@@ -442,7 +442,7 @@ impl<W> Encoder<W, lz77::DefaultEncoder>
 }
 impl<W, E> Encoder<W, E>
     where W: io::Write,
-          E: lz77::Encode
+          E: lz77::Lz77Encode
 {
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));

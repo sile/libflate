@@ -13,27 +13,27 @@ pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
 const MAX_NON_COMPRESSED_BLOCK_SIZE: usize = 0xFFFF;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct EncodeOptions<E = lz77::DefaultEncoder> {
+pub struct EncodeOptions<E = lz77::DefaultLz77Encoder> {
     block_size: usize,
     dynamic_huffman: bool,
     lz77: Option<E>,
 }
-impl Default for EncodeOptions<lz77::DefaultEncoder> {
+impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl EncodeOptions<lz77::DefaultEncoder> {
+impl EncodeOptions<lz77::DefaultLz77Encoder> {
     pub fn new() -> Self {
         EncodeOptions {
             block_size: DEFAULT_BLOCK_SIZE,
             dynamic_huffman: true,
-            lz77: Some(lz77::DefaultEncoder),
+            lz77: Some(lz77::DefaultLz77Encoder::new()),
         }
     }
 }
 impl<E> EncodeOptions<E>
-    where E: lz77::Encode
+    where E: lz77::Lz77Encode
 {
     pub fn with_lz77(lz77: E) -> Self {
         EncodeOptions {
@@ -77,11 +77,11 @@ impl<E> EncodeOptions<E>
 }
 
 #[derive(Debug)]
-pub struct Encoder<W, E = lz77::DefaultEncoder> {
+pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     writer: bit::BitWriter<W>,
     block: Block<E>,
 }
-impl<W> Encoder<W, lz77::DefaultEncoder>
+impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     where W: io::Write
 {
     pub fn new(inner: W) -> Self {
@@ -90,7 +90,7 @@ impl<W> Encoder<W, lz77::DefaultEncoder>
 }
 impl<W, E> Encoder<W, E>
     where W: io::Write,
-          E: lz77::Encode
+          E: lz77::Lz77Encode
 {
     pub fn with_options(inner: W, options: EncodeOptions<E>) -> Self {
         Encoder {
@@ -116,7 +116,7 @@ impl<W, E> Encoder<W, E>
 }
 impl<W, E> io::Write for Encoder<W, E>
     where W: io::Write,
-          E: lz77::Encode
+          E: lz77::Lz77Encode
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         try!(self.block.write(&mut self.writer, buf));
@@ -134,7 +134,7 @@ struct Block<E> {
     block_buf: BlockBuf<E>,
 }
 impl<E> Block<E>
-    where E: lz77::Encode
+    where E: lz77::Lz77Encode
 {
     fn new(options: EncodeOptions<E>) -> Self {
         Block {
@@ -172,7 +172,7 @@ enum BlockBuf<E> {
     Dynamic(CompressBuf<symbol::DynamicHuffmanCodec, E>),
 }
 impl<E> BlockBuf<E>
-    where E: lz77::Encode
+    where E: lz77::Lz77Encode
 {
     fn new(lz77: Option<E>, dynamic: bool) -> Self {
         if let Some(lz77) = lz77 {
@@ -246,7 +246,7 @@ struct CompressBuf<H, E> {
 }
 impl<H, E> CompressBuf<H, E>
     where H: symbol::HuffmanCodec,
-          E: lz77::Encode
+          E: lz77::Lz77Encode
 {
     fn new(huffman: H, lz77: E) -> Self {
         CompressBuf {

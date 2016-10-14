@@ -116,6 +116,7 @@ pub struct Decoder {
     max_bitwidth: u8,
 }
 impl Decoder {
+    #[inline(always)]
     pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
         where R: io::Read
     {
@@ -174,6 +175,7 @@ pub struct Encoder {
     table: Vec<Code>,
 }
 impl Encoder {
+    #[inline(always)]
     pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: u16) -> io::Result<()>
         where W: io::Write
     {
@@ -181,6 +183,7 @@ impl Encoder {
         debug_assert!(code != Code::new(0, 0));
         writer.write_bits(code.width, code.bits)
     }
+    #[inline(always)]
     pub fn lookup(&self, symbol: u16) -> Code {
         debug_assert!(symbol < self.table.len() as u16,
                       "symbol:{}, table:{}",

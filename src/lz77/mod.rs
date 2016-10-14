@@ -1,5 +1,6 @@
-// use std::cmp;
-// use std::collections::HashMap;
+pub use self::default::DefaultLz77Encoder;
+
+mod default;
 
 pub const MAX_LENGTH: u16 = 258;
 pub const MAX_DISTANCE: u16 = 32768;
@@ -35,8 +36,7 @@ impl<'a, T> Sink for &'a mut T
     }
 }
 
-// TODO: Lz77 or Lz77Encode or Lz77Compress
-pub trait Encode {
+pub trait Lz77Encode {
     fn encode<S>(&mut self, buf: &[u8], sink: S) where S: Sink;
     fn flush<S>(&mut self, sink: S) where S: Sink;
     fn compression_mode(&self) -> CompressionMode {
@@ -60,10 +60,14 @@ impl Default for CompressionMode {
     }
 }
 
-// TODO: delete Clone, Default
-#[derive(Debug, Clone, Default)]
-pub struct DefaultEncoder;
-impl Encode for DefaultEncoder {
+#[derive(Debug)]
+pub struct NonCompressedLz77Encoder {}
+impl NonCompressedLz77Encoder {
+    pub fn new() -> Self {
+        NonCompressedLz77Encoder {}
+    }
+}
+impl Lz77Encode for NonCompressedLz77Encoder {
     fn encode<S>(&mut self, buf: &[u8], mut sink: S)
         where S: Sink
     {
@@ -73,4 +77,7 @@ impl Encode for DefaultEncoder {
     }
     #[allow(unused_variables)]
     fn flush<S>(&mut self, sink: S) where S: Sink {}
+    fn compression_mode(&self) -> CompressionMode {
+        CompressionMode::NoCompression
+    }
 }
