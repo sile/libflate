@@ -83,7 +83,7 @@ fn main() {
     } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
         let mut encoder = gzip::Encoder::new(output).unwrap();
         io::copy(&mut input, &mut encoder).expect("Encoding GZIP stream failed");
-        encoder.finish().result().unwrap();
+        encoder.finish().into_result().unwrap();
     } else if let Some(_matches) = matches.subcommand_matches("zlib-decode") {
         let mut decoder = zlib::Decoder::new(input).expect("Read ZLIB header failed");
         if verbose {
@@ -93,7 +93,7 @@ fn main() {
     } else if let Some(_matches) = matches.subcommand_matches("zlib-encode") {
         let mut encoder = zlib::Encoder::new(output).unwrap();
         io::copy(&mut input, &mut encoder).expect("Encoding ZLIB stream failed");
-        encoder.finish().result().unwrap();
+        encoder.finish().into_result().unwrap();
     } else {
         println!("{}", matches.usage());
         process::exit(1);

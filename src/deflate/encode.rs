@@ -107,7 +107,7 @@ impl<W, E> Encoder<W, E>
     pub fn into_inner(self) -> W {
         self.writer.into_inner()
     }
-    pub fn finish(mut self) -> Finish<W> {
+    pub fn finish(mut self) -> Finish<W, io::Error> {
         match self.block.finish(&mut self.writer) {
             Ok(_) => Finish::new(self.writer.into_inner(), None),
             Err(e) => Finish::new(self.writer.into_inner(), Some(e)),

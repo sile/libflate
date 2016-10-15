@@ -306,7 +306,7 @@ impl<W, E> Encoder<W, E>
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn finish(self) -> Finish<W> {
+    pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
         match inner.write_u32::<BigEndian>(self.adler32.value())
             .and_then(|_| inner.flush()) {
@@ -363,7 +363,7 @@ mod test {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
-        let encoded = encoder.finish().result().unwrap();
+        let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
 
@@ -374,7 +374,7 @@ mod test {
                                                 EncodeOptions::default().fixed_huffman_codes())
             .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
-        let encoded = encoder.finish().result().unwrap();
+        let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
 
@@ -384,7 +384,7 @@ mod test {
         let mut encoder = Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression())
             .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
-        let encoded = encoder.finish().result().unwrap();
+        let encoded = encoder.finish().into_result().unwrap();
         let expected = [120, 1, 1, 12, 0, 243, 255, 72, 101, 108, 108, 111, 32, 87, 111, 114, 108,
                         100, 33, 28, 73, 4, 62];
         assert_eq!(encoded, expected);

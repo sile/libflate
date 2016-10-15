@@ -96,7 +96,7 @@ impl io::Write for BenchWriter {
 }
 impl From<libflate::deflate::Encoder<BenchWriter>> for BenchWriter {
     fn from(f: libflate::deflate::Encoder<BenchWriter>) -> Self {
-        f.finish().result().unwrap()
+        f.finish().into_result().unwrap()
     }
 }
 impl From<flate2::write::DeflateEncoder<BenchWriter>> for BenchWriter {

@@ -456,7 +456,7 @@ impl<W, E> Encoder<W, E>
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn finish(self) -> Finish<W> {
+    pub fn finish(self) -> Finish<W, io::Error> {
         let trailer = Trailer {
             crc32: self.crc32.value(),
             input_size: self.input_size,
@@ -551,7 +551,7 @@ mod test {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
-        let encoded = encoder.finish().result().unwrap();
+        let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
 }
