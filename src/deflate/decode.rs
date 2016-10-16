@@ -8,6 +8,7 @@ use bit;
 use lz77;
 use super::symbol;
 
+/// DEFLATE decoder.
 #[derive(Debug)]
 pub struct Decoder<R> {
     bit_reader: bit::BitReader<R>,
@@ -18,6 +19,22 @@ pub struct Decoder<R> {
 impl<R> Decoder<R>
     where R: Read
 {
+    /// Makes a new decoder instance.
+    ///
+    /// `inner` is to be decoded DEFLATE stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::{Cursor, Read};
+    /// use libflate::deflate::Decoder;
+    ///
+    /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
+    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data));
+    /// let mut buf = Vec::new();
+    /// decoder.read_to_end(&mut buf).unwrap();
+    ///
+    /// assert_eq!(buf, b"Hello World!");
+    /// ```
     pub fn new(inner: R) -> Self {
         Decoder {
             bit_reader: bit::BitReader::new(inner),
@@ -26,15 +43,32 @@ impl<R> Decoder<R>
             eos: false,
         }
     }
+
+    /// Returns the immutable reference to the inner stream.
     pub fn as_inner_ref(&self) -> &R {
         self.bit_reader.as_inner_ref()
     }
+
+    /// Returns the mutable reference to the inner stream.
     pub fn as_inner_mut(&mut self) -> &mut R {
         self.bit_reader.as_inner_mut()
     }
+
+    /// Unwraps this `Decoder`, returning the underlying reader.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::deflate::Decoder;
+    ///
+    /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data));
+    /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data);
+    /// ```
     pub fn into_inner(self) -> R {
         self.bit_reader.into_inner()
     }
+
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
         let len = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());

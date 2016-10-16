@@ -9,9 +9,12 @@ use finish::Finish;
 use super::symbol;
 use super::BlockType;
 
+/// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
+
 const MAX_NON_COMPRESSED_BLOCK_SIZE: usize = 0xFFFF;
 
+/// Options for a DEFLATE encoder.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EncodeOptions<E = lz77::DefaultLz77Encoder> {
     block_size: usize,
@@ -24,6 +27,15 @@ impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl EncodeOptions<lz77::DefaultLz77Encoder> {
+    /// Makes a default instance.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new();
+    /// let encoder = Encoder::with_options(Vec::new(), options);
+    /// ```
     pub fn new() -> Self {
         EncodeOptions {
             block_size: DEFAULT_BLOCK_SIZE,
@@ -35,6 +47,16 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
 impl<E> EncodeOptions<E>
     where E: lz77::Lz77Encode
 {
+    /// Specifies the LZ77 encoder used to compress input data.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::with_lz77(DefaultLz77Encoder::new());
+    /// let encoder = Encoder::with_options(Vec::new(), options);
+    /// ```
     pub fn with_lz77(lz77: E) -> Self {
         EncodeOptions {
             block_size: DEFAULT_BLOCK_SIZE,
@@ -42,22 +64,52 @@ impl<E> EncodeOptions<E>
             lz77: Some(lz77),
         }
     }
+
+    /// Disables LZ77 compression.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().no_compression();
+    /// let encoder = Encoder::with_options(Vec::new(), options);
+    /// ```
     pub fn no_compression(mut self) -> Self {
         self.lz77 = None;
         self
     }
+
+    /// Specifies the hint of the size of a DEFLATE block.
+    ///
+    /// The default value is `DEFAULT_BLOCK_SIZE`.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().block_size(512 * 1024);
+    /// let encoder = Encoder::with_options(Vec::new(), options);
+    /// ```
     pub fn block_size(mut self, size: usize) -> Self {
         self.block_size = size;
         self
     }
-    pub fn dynamic_huffman_codes(mut self) -> Self {
-        self.dynamic_huffman = true;
-        self
-    }
+
+    /// Specifies to compress with fixed huffman codes.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().fixed_huffman_codes();
+    /// let encoder = Encoder::with_options(Vec::new(), options);
+    /// ```
     pub fn fixed_huffman_codes(mut self) -> Self {
         self.dynamic_huffman = false;
         self
     }
+
     fn get_block_type(&self) -> BlockType {
         if self.lz77.is_none() {
             BlockType::Raw
@@ -76,6 +128,7 @@ impl<E> EncodeOptions<E>
     }
 }
 
+/// DEFLATE encoder.
 #[derive(Debug)]
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     writer: bit::BitWriter<W>,
@@ -84,6 +137,22 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     where W: io::Write
 {
+    /// Makes a new encoder instance.
+    ///
+    /// Encoded DEFLATE stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::deflate::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new());
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
+    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0]);
+    /// ```
     pub fn new(inner: W) -> Self {
         Self::with_options(inner, EncodeOptions::default())
     }
@@ -92,26 +161,64 @@ impl<W, E> Encoder<W, E>
     where W: io::Write,
           E: lz77::Lz77Encode
 {
+    /// Makes a new encoder instance with specified options.
+    ///
+    /// Encoded DEFLATE stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::deflate::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().no_compression();
+    /// let mut encoder = Encoder::with_options(Vec::new(), options);
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [1, 12, 0, 243, 255, 72, 101, 108, 108, 111, 32, 87, 111,
+    ///             114, 108, 100, 33]);
+    /// ```
     pub fn with_options(inner: W, options: EncodeOptions<E>) -> Self {
         Encoder {
             writer: bit::BitWriter::new(inner),
             block: Block::new(options),
         }
     }
-    pub fn as_inner_ref(&self) -> &W {
-        self.writer.as_inner_ref()
-    }
-    pub fn as_inner_mut(&mut self) -> &mut W {
-        self.writer.as_inner_mut()
-    }
-    pub fn into_inner(self) -> W {
-        self.writer.into_inner()
-    }
+
+    /// Flushes internal buffer and returns the inner stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::deflate::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new());
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
+    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0]);
+    /// ```
     pub fn finish(mut self) -> Finish<W, io::Error> {
         match self.block.finish(&mut self.writer) {
             Ok(_) => Finish::new(self.writer.into_inner(), None),
             Err(e) => Finish::new(self.writer.into_inner(), Some(e)),
         }
+    }
+
+    /// Returns the immutable reference to the inner stream.
+    pub fn as_inner_ref(&self) -> &W {
+        self.writer.as_inner_ref()
+    }
+
+    /// Returns the mutable reference to the inner stream.
+    pub fn as_inner_mut(&mut self) -> &mut W {
+        self.writer.as_inner_mut()
+    }
+
+    /// Unwraps the `Encoder`, returning the inner stream.
+    pub fn into_inner(self) -> W {
+        self.writer.into_inner()
     }
 }
 impl<W, E> io::Write for Encoder<W, E>
