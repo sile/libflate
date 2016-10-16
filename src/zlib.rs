@@ -422,7 +422,6 @@ impl<E> EncodeOptions<E>
     ///
     /// # Example
     /// ```
-    /// use libflate::lz77::DefaultLz77Encoder;
     /// use libflate::zlib::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().block_size(512 * 1024);
@@ -437,7 +436,6 @@ impl<E> EncodeOptions<E>
     ///
     /// # Example
     /// ```
-    /// use libflate::lz77::DefaultLz77Encoder;
     /// use libflate::zlib::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().fixed_huffman_codes();
