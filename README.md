@@ -1,7 +1,7 @@
 libflate
 ========
 
-![libflate](http://meritbadge.herokuapp.com/libflate)](https://crates.io/crates/libflate)
+[![libflate](http://meritbadge.herokuapp.com/libflate)](https://crates.io/crates/libflate)
 [![Build Status](https://travis-ci.org/sile/libflate.svg?branch=master)](https://travis-ci.org/sile/libflate)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
