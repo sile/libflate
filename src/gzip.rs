@@ -1,4 +1,24 @@
-/// https://tools.ietf.org/html/rfc1952
+//! The encoder and decoder of the GZIP format.
+//!
+//! The GZIP format is defined in [RFC-1952](https://tools.ietf.org/html/rfc1952).
+//!
+//! # Examples
+//! ```
+//! use std::io::{self, Read};
+//! use libflate::gzip::{Encoder, Decoder};
+//!
+//! // Encoding
+//! let mut encoder = Encoder::new(Vec::new()).unwrap();
+//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! let encoded_data = encoder.finish().into_result().unwrap();
+//!
+//! // Decoding
+//! let mut decoder = Decoder::new(io::Cursor::new(encoded_data)).unwrap();
+//! let mut decoded_data = Vec::new();
+//! decoder.read_to_end(&mut decoded_data).unwrap();
+//!
+//! assert_eq!(decoded_data, b"Hello World!");
+//! ```
 use std::io;
 use std::time;
 use std::ffi::CString;
@@ -36,10 +56,16 @@ const F_EXTRA: u8 = 0b000100;
 const F_NAME: u8 = 0b001000;
 const F_COMMENT: u8 = 0b010000;
 
-#[derive(Debug, Clone)]
+/// Compression levels defined by the GZIP format.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CompressionLevel {
+    /// Compressor used fastest algorithm.
     Fastest,
+
+    /// Compressor used maximum compression, slowest algorithm.
     Slowest,
+
+    /// No information about compression method.
     Unknown,
 }
 impl CompressionLevel {
@@ -91,11 +117,27 @@ impl Trailer {
     }
 }
 
+/// GZIP header builder.
 #[derive(Debug, Clone)]
 pub struct HeaderBuilder {
     header: Header,
 }
 impl HeaderBuilder {
+    /// Makes a new builder instance.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::{HeaderBuilder, CompressionLevel, Os};
+    ///
+    /// let header = HeaderBuilder::new().finish();
+    /// assert_eq!(header.compression_level(), CompressionLevel::Unknown);
+    /// assert_eq!(header.os(), Os::Unix);
+    /// assert_eq!(header.is_text(), false);
+    /// assert_eq!(header.is_verified(), false);
+    /// assert_eq!(header.extra_field(), None);
+    /// assert_eq!(header.filename(), None);
+    /// assert_eq!(header.comment(), None);
+    /// ```
     pub fn new() -> Self {
         let modification_time = time::UNIX_EPOCH.elapsed().map(|d| d.as_secs() as u32).unwrap_or(0);
         let header = Header {
@@ -110,39 +152,114 @@ impl HeaderBuilder {
         };
         HeaderBuilder { header: header }
     }
+
+    /// Sets the modification time (UNIX timestamp).
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::HeaderBuilder;
+    ///
+    /// let header = HeaderBuilder::new().modification_time(10).finish();
+    /// assert_eq!(header.modification_time(), 10);
+    /// ```
     pub fn modification_time(&mut self, modification_time: u32) -> &mut Self {
         self.header.modification_time = modification_time;
         self
     }
+
+    /// Sets the OS type.
+    ///
+    /// ```
+    /// use libflate::gzip::{HeaderBuilder, Os};
+    ///
+    /// let header = HeaderBuilder::new().os(Os::Ntfs).finish();
+    /// assert_eq!(header.os(), Os::Ntfs);
+    /// ```
     pub fn os(&mut self, os: Os) -> &mut Self {
         self.header.os = os;
         self
     }
+
+    /// Indicates the encoding data is a ASCII text.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::HeaderBuilder;
+    ///
+    /// let header = HeaderBuilder::new().text().finish();
+    /// assert_eq!(header.is_text(), true);
+    /// ```
     pub fn text(&mut self) -> &mut Self {
         self.header.is_text = true;
         self
     }
+
+    /// Specifies toe verify header bytes using CRC-16.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::HeaderBuilder;
+    ///
+    /// let header = HeaderBuilder::new().verify().finish();
+    /// assert_eq!(header.is_verified(), true);
+    /// ```
     pub fn verify(&mut self) -> &mut Self {
         self.header.is_verified = true;
         self
     }
+
+    /// Sets the extra field.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::{HeaderBuilder, ExtraField};
+    ///
+    /// let extra = ExtraField{id: [0, 1], data: vec![2, 3, 4]};
+    /// let header = HeaderBuilder::new().extra_field(extra.clone()).finish();
+    /// assert_eq!(header.extra_field(), Some(&extra));
+    /// ```
     pub fn extra_field(&mut self, extra: ExtraField) -> &mut Self {
         self.header.extra_field = Some(extra);
         self
     }
+
+    /// Sets the file name.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::ffi::CString;
+    /// use libflate::gzip::HeaderBuilder;
+    ///
+    /// let header = HeaderBuilder::new().filename(CString::new("foo").unwrap()).finish();
+    /// assert_eq!(header.filename(), Some(&CString::new("foo").unwrap()));
+    /// ```
     pub fn filename(&mut self, filename: CString) -> &mut Self {
         self.header.filename = Some(filename);
         self
     }
+
+    /// Sets the comment.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::ffi::CString;
+    /// use libflate::gzip::HeaderBuilder;
+    ///
+    /// let header = HeaderBuilder::new().comment(CString::new("foo").unwrap()).finish();
+    /// assert_eq!(header.comment(), Some(&CString::new("foo").unwrap()));
+    /// ```
     pub fn comment(&mut self, comment: CString) -> &mut Self {
         self.header.comment = Some(comment);
         self
     }
+
+    /// Returns the result header.
     pub fn finish(&self) -> Header {
         self.header.clone()
     }
 }
 
+/// GZIP Header.
 #[derive(Debug, Clone)]
 pub struct Header {
     modification_time: u32,
@@ -155,27 +272,42 @@ pub struct Header {
     comment: Option<CString>,
 }
 impl Header {
+    /// Returns the modification time (UNIX timestamp).
     pub fn modification_time(&self) -> u32 {
         self.modification_time
     }
+
+    /// Returns the compression level.
     pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level.clone()
     }
+
+    /// Returns the OS type.
     pub fn os(&self) -> Os {
         self.os.clone()
     }
+
+    /// Returns `true` if the stream is probably ASCII text, `false` otherwise.
     pub fn is_text(&self) -> bool {
         self.is_text
     }
+
+    /// Returns `true` if the header bytes is verified by CRC-16, `false` otherwise.
     pub fn is_verified(&self) -> bool {
         self.is_verified
     }
+
+    /// Returns the extra field.
     pub fn extra_field(&self) -> Option<&ExtraField> {
         self.extra_field.as_ref()
     }
+
+    /// Returns the file name.
     pub fn filename(&self) -> Option<&CString> {
         self.filename.as_ref()
     }
+
+    /// Returns the comment.
     pub fn comment(&self) -> Option<&CString> {
         self.comment.as_ref()
     }
@@ -280,9 +412,13 @@ fn read_cstring<R>(mut reader: R) -> io::Result<CString>
     }
 }
 
-#[derive(Debug, Clone)]
+/// Extra field of a GZIP header.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtraField {
+    /// ID of the extra field.
     pub id: [u8; 2],
+
+    /// Data of the extra field.
     pub data: Vec<u8>,
 }
 impl ExtraField {
@@ -311,23 +447,55 @@ impl ExtraField {
     }
 }
 
-#[derive(Debug, Clone)]
+/// OS type.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Os {
+    /// FAT filesystem (MS-DOS, OS/2, NT/Win32)
     Fat,
+
+    /// Amiga
     Amiga,
+
+    /// VMS (or OpenVMS)
     Vms,
+
+    /// Unix
     Unix,
+
+    /// VM/CMS
     VmCms,
+
+    /// Atari TOS
     AtariTos,
+
+    /// HPFS filesystem (OS/2, NT)
     Hpfs,
+
+    /// Macintosh
     Macintosh,
+
+    /// Z-System
     ZSystem,
+
+    /// CP/M
     CpM,
+
+    /// TOPS-20
     Tops20,
+
+    /// NTFS filesystem (NT)
     Ntfs,
+
+    /// QDOS
     Qdos,
+
+    /// Acorn RISCOS
     AcornRiscos,
+
+    /// Unknown
     Unknown,
+
+    /// Undefined value in RFC-1952
     Undefined(u8),
 }
 impl Os {
@@ -373,6 +541,8 @@ impl Os {
     }
 }
 
+
+/// Options for a GZIP encoder.
 #[derive(Debug)]
 pub struct EncodeOptions<E>
     where E: lz77::Lz77Encode
@@ -389,6 +559,15 @@ impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl EncodeOptions<lz77::DefaultLz77Encoder> {
+    /// Makes a default instance.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -396,6 +575,16 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
 impl<E> EncodeOptions<E>
     where E: lz77::Lz77Encode
 {
+    /// Specifies the LZ77 encoder used to compress input data.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::gzip::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::with_lz77(DefaultLz77Encoder::new());
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn with_lz77(lz77: E) -> Self {
         let mut header = HeaderBuilder::new().finish();
         header.compression_level = From::from(lz77.compression_level());
@@ -404,29 +593,70 @@ impl<E> EncodeOptions<E>
             options: deflate::EncodeOptions::with_lz77(lz77),
         }
     }
+
+    /// Disables LZ77 compression.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::gzip::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().no_compression();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn no_compression(mut self) -> Self {
         self.options = self.options.no_compression();
         self.header.compression_level = CompressionLevel::Unknown;
         self
     }
+
+    /// Sets the GZIP header which will be written to the output stream.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::gzip::{Encoder, EncodeOptions, HeaderBuilder};
+    ///
+    /// let header = HeaderBuilder::new().text().modification_time(100).finish();
+    /// let options = EncodeOptions::new().header(header);
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn header(mut self, header: Header) -> Self {
         self.header = header;
         self
     }
+
+    /// Specifies the hint of the size of a DEFLATE block.
+    ///
+    /// The default value is `deflate::DEFAULT_BLOCK_SIZE`.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::gzip::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().block_size(512 * 1024);
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn block_size(mut self, size: usize) -> Self {
         self.options = self.options.block_size(size);
         self
     }
-    pub fn dynamic_huffman_codes(mut self) -> Self {
-        self.options = self.options.dynamic_huffman_codes();
-        self
-    }
+
+    /// Specifies to compress with fixed huffman codes.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::gzip::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().fixed_huffman_codes();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn fixed_huffman_codes(mut self) -> Self {
         self.options = self.options.fixed_huffman_codes();
         self
     }
 }
 
+/// GZIP encoder.
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
     crc32: checksum::Crc32,
@@ -436,6 +666,19 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     where W: io::Write
 {
+    /// Makes a new encoder instance.
+    ///
+    /// Encoded GZIP stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::gzip::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new()).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.finish().into_result().unwrap();
+    /// ```
     pub fn new(inner: W) -> io::Result<Self> {
         Self::with_options(inner, EncodeOptions::new())
     }
@@ -444,6 +687,24 @@ impl<W, E> Encoder<W, E>
     where W: io::Write,
           E: lz77::Lz77Encode
 {
+    /// Makes a new encoder instance with specified options.
+    ///
+    /// Encoded GZIP stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::gzip::{Encoder, EncodeOptions, HeaderBuilder};
+    ///
+    /// let header = HeaderBuilder::new().modification_time(123).finish();
+    /// let options = EncodeOptions::new().no_compression().header(header);
+    /// let mut encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            &[31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
+    ///              111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0][..]);
+    /// ```
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));
         Ok(Encoder {
@@ -453,9 +714,32 @@ impl<W, E> Encoder<W, E>
             writer: deflate::Encoder::with_options(inner, options.options),
         })
     }
+
+    /// Returns the header of the GZIP stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::{Encoder, Os};
+    ///
+    /// let encoder = Encoder::new(Vec::new()).unwrap();
+    /// assert_eq!(encoder.header().os(), Os::Unix);
+    /// ```
     pub fn header(&self) -> &Header {
         &self.header
     }
+
+    /// Writes the GZIP trailer and returns the inner stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::gzip::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new()).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert!(encoder.finish().as_result().is_ok())
+    /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let trailer = Trailer {
             crc32: self.crc32.value(),
@@ -482,6 +766,7 @@ impl<W> io::Write for Encoder<W>
     }
 }
 
+/// GZIP decoder.
 #[derive(Debug)]
 pub struct Decoder<R> {
     header: Header,
@@ -492,6 +777,24 @@ pub struct Decoder<R> {
 impl<R> Decoder<R>
     where R: io::Read
 {
+    /// Makes a new decoder instance.
+    ///
+    /// `inner` is to be decoded GZIP stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::{Cursor, Read};
+    /// use libflate::gzip::Decoder;
+    ///
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
+    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    ///
+    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// let mut buf = Vec::new();
+    /// decoder.read_to_end(&mut buf).unwrap();
+    ///
+    /// assert_eq!(buf, b"Hello World!");
+    /// ```
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = try!(Header::read_from(&mut inner));
         Ok(Decoder {
@@ -501,9 +804,37 @@ impl<R> Decoder<R>
             eos: false,
         })
     }
+
+    /// Returns the header of the GZIP stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::gzip::{Decoder, Os};
+    ///
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
+    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    ///
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// assert_eq!(decoder.header().os(), Os::Unix);
+    /// ```
     pub fn header(&self) -> &Header {
         &self.header
     }
+
+    /// Unwraps this `Decoder`, returning the underlying reader.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::gzip::Decoder;
+    ///
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
+    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    ///
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data[..]);
+    /// ```
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
     }
@@ -534,21 +865,21 @@ impl<R> io::Read for Decoder<R>
     }
 }
 
-pub fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
-    let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
-    let mut buf = Vec::with_capacity(buf.len());
-    try!(io::copy(&mut decoder, &mut buf));
-    Ok(buf)
-}
-
 #[cfg(test)]
 mod test {
     use std::io;
     use super::*;
 
+    fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
+        let mut buf = Vec::with_capacity(buf.len());
+        try!(io::copy(&mut decoder, &mut buf));
+        Ok(buf)
+    }
+
     #[test]
     fn encode_works() {
-        let plain = b"Hello World! Hello ZLIB!!";
+        let plain = b"Hello World! Hello GZIP!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
