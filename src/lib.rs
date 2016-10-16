@@ -1,3 +1,5 @@
+//! A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
+#![warn(missing_docs)]
 extern crate byteorder;
 
 pub use finish::Finish;

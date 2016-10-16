@@ -58,11 +58,11 @@ impl CompressionLevel {
         }
     }
 }
-impl From<lz77::CompressionMode> for CompressionLevel {
-    fn from(f: lz77::CompressionMode) -> Self {
+impl From<lz77::CompressionLevel> for CompressionLevel {
+    fn from(f: lz77::CompressionLevel) -> Self {
         match f {
-            lz77::CompressionMode::BestSpeed => CompressionLevel::Fastest,
-            lz77::CompressionMode::BestCompression => CompressionLevel::Slowest,
+            lz77::CompressionLevel::Fast => CompressionLevel::Fastest,
+            lz77::CompressionLevel::Best => CompressionLevel::Slowest,
             _ => CompressionLevel::Unknown,
         }
     }
@@ -398,7 +398,7 @@ impl<E> EncodeOptions<E>
 {
     pub fn with_lz77(lz77: E) -> Self {
         let mut header = HeaderBuilder::new().finish();
-        header.compression_level = From::from(lz77.compression_mode());
+        header.compression_level = From::from(lz77.compression_level());
         EncodeOptions {
             header: header,
             options: deflate::EncodeOptions::with_lz77(lz77),

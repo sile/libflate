@@ -32,13 +32,13 @@ impl CompressionLevel {
         self.clone() as u8
     }
 }
-impl From<lz77::CompressionMode> for CompressionLevel {
-    fn from(f: lz77::CompressionMode) -> Self {
+impl From<lz77::CompressionLevel> for CompressionLevel {
+    fn from(f: lz77::CompressionLevel) -> Self {
         match f {
-            lz77::CompressionMode::NoCompression => CompressionLevel::Fastest,
-            lz77::CompressionMode::BestSpeed => CompressionLevel::Fast,
-            lz77::CompressionMode::Balance => CompressionLevel::Default,
-            lz77::CompressionMode::BestCompression => CompressionLevel::Slowest,
+            lz77::CompressionLevel::None => CompressionLevel::Fastest,
+            lz77::CompressionLevel::Fast => CompressionLevel::Fast,
+            lz77::CompressionLevel::Balance => CompressionLevel::Default,
+            lz77::CompressionLevel::Best => CompressionLevel::Slowest,
         }
     }
 }
@@ -122,7 +122,7 @@ impl Header {
         where E: lz77::Lz77Encode
     {
         Header {
-            compression_level: From::from(lz77.compression_mode()),
+            compression_level: From::from(lz77.compression_level()),
             window_size: Lz77WindowSize::from_u16(lz77.window_size()),
         }
     }
