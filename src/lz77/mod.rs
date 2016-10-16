@@ -1,4 +1,6 @@
 //! The interface and implementations of LZ77 compression algorithm.
+//!
+//! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
 pub use self::default::DefaultLz77Encoder;
 
 mod default;
