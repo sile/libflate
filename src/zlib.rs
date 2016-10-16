@@ -1,4 +1,24 @@
-// https://tools.ietf.org/html/rfc1950
+//! The encoder and decoder of the ZLIB format.
+//!
+//! The ZLIB format is defined in [RFC-1950](https://tools.ietf.org/html/rfc1950).
+//!
+//! # Examples
+//! ```
+//! use std::io::{self, Read};
+//! use libflate::zlib::{Encoder, Decoder};
+//!
+//! // Encoding
+//! let mut encoder = Encoder::new(Vec::new()).unwrap();
+//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! let encoded_data = encoder.finish().into_result().unwrap();
+//!
+//! // Decoding
+//! let mut decoder = Decoder::new(io::Cursor::new(encoded_data)).unwrap();
+//! let mut decoded_data = Vec::new();
+//! decoder.read_to_end(&mut decoded_data).unwrap();
+//!
+//! assert_eq!(decoded_data, b"Hello World!");
+//! ```
 use std::io;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
@@ -11,11 +31,19 @@ use finish::Finish;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
+/// Compression levels defined by the ZLIB format.
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub enum CompressionLevel {
+    /// Compressor used fastest algorithm.
     Fastest = 0,
+
+    /// Compressor used fast algorithm.
     Fast = 1,
+
+    /// Compressor used default algorithm.
     Default = 2,
+
+    /// Compressor used maximum compression, slowest algorithm.
     Slowest = 3,
 }
 impl CompressionLevel {
@@ -43,15 +71,31 @@ impl From<lz77::CompressionLevel> for CompressionLevel {
     }
 }
 
+/// LZ77 Window sizes defined by the ZLIB format.
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub enum Lz77WindowSize {
+    /// 256 bytes
     B256 = 0,
+
+    /// 512 btyes
     B512 = 1,
+
+    /// 1 kilobyte
     KB1 = 2,
+
+    /// 2 kilobytes
     KB2 = 3,
+
+    /// 4 kitobytes
     KB4 = 4,
+
+    /// 8 kitobytes
     KB8 = 5,
+
+    /// 16 kitobytes
     KB16 = 6,
+
+    /// 32 kitobytes
     KB32 = 7,
 }
 impl Lz77WindowSize {
@@ -71,6 +115,22 @@ impl Lz77WindowSize {
     fn as_u4(&self) -> u8 {
         self.clone() as u8
     }
+
+    /// Converts from `u16` to Lz77WindowSize`.
+    ///
+    /// Fractions are rounded to next upper window size.
+    /// If `size` exceeds maximum window size,
+    /// `lz77::MAX_WINDOW_SIZE` will be used instead.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::zlib::Lz77WindowSize;
+    ///
+    /// assert_eq!(Lz77WindowSize::from_u16(15000), Lz77WindowSize::KB16);
+    /// assert_eq!(Lz77WindowSize::from_u16(16384), Lz77WindowSize::KB16);
+    /// assert_eq!(Lz77WindowSize::from_u16(16385), Lz77WindowSize::KB32);
+    /// assert_eq!(Lz77WindowSize::from_u16(40000), Lz77WindowSize::KB32);
+    /// ```
     pub fn from_u16(size: u16) -> Self {
         use self::Lz77WindowSize::*;
         if 16384 < size {
@@ -91,6 +151,15 @@ impl Lz77WindowSize {
             B256
         }
     }
+
+    /// Converts from `Lz77WindowSize` to `u16`.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::zlib::Lz77WindowSize;
+    ///
+    /// assert_eq!(Lz77WindowSize::KB16.to_u16(), 16384u16);
+    /// ```
     pub fn to_u16(&self) -> u16 {
         use self::Lz77WindowSize::*;
         match *self {
@@ -106,15 +175,18 @@ impl Lz77WindowSize {
     }
 }
 
+/// ZLIB header.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
     window_size: Lz77WindowSize,
     compression_level: CompressionLevel,
 }
 impl Header {
+    /// Returns the LZ77 window size stored in the header.
     pub fn window_size(&self) -> Lz77WindowSize {
         self.window_size.clone()
     }
+    /// Returns the compression level stored in the header.
     pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level.clone()
     }
@@ -178,6 +250,7 @@ impl Header {
     }
 }
 
+/// ZLIB decoder.
 #[derive(Debug)]
 pub struct Decoder<R> {
     header: Header,
@@ -188,6 +261,24 @@ pub struct Decoder<R> {
 impl<R> Decoder<R>
     where R: io::Read
 {
+    /// Makes a new decoder instance.
+    ///
+    /// `inner` is to be decoded ZLIB stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::{Cursor, Read};
+    /// use libflate::zlib::Decoder;
+    ///
+    /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
+    ///                     202, 73, 81, 4, 0, 28, 73, 4, 62];
+    ///
+    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data)).unwrap();
+    /// let mut buf = Vec::new();
+    /// decoder.read_to_end(&mut buf).unwrap();
+    ///
+    /// assert_eq!(buf, b"Hello World!");
+    /// ```
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = try!(Header::read_from(&mut inner));
         Ok(Decoder {
@@ -197,9 +288,38 @@ impl<R> Decoder<R>
             eos: false,
         })
     }
+
+    /// Returns the header of the ZLIB stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::zlib::{Decoder, CompressionLevel};
+    ///
+    /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
+    ///                     202, 73, 81, 4, 0, 28, 73, 4, 62];
+    ///
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data)).unwrap();
+    /// assert_eq!(decoder.header().compression_level(),
+    ///            CompressionLevel::Default);
+    /// ```
     pub fn header(&self) -> &Header {
         &self.header
     }
+
+    /// Unwraps this `Decoder`, returning the underlying reader.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::zlib::Decoder;
+    ///
+    /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
+    ///                     202, 73, 81, 4, 0, 28, 73, 4, 62];
+    ///
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data)).unwrap();
+    /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data);
+    /// ```
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
     }
@@ -230,6 +350,7 @@ impl<R> io::Read for Decoder<R>
     }
 }
 
+/// Options for a ZLIB encoder.
 #[derive(Debug)]
 pub struct EncodeOptions<E>
     where E: lz77::Lz77Encode
@@ -246,6 +367,15 @@ impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl EncodeOptions<lz77::DefaultLz77Encoder> {
+    /// Makes a default instance.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
@@ -253,31 +383,73 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
 impl<E> EncodeOptions<E>
     where E: lz77::Lz77Encode
 {
+    /// Specifies the LZ77 encoder used to compress input data.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::with_lz77(DefaultLz77Encoder::new());
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn with_lz77(lz77: E) -> Self {
         EncodeOptions {
             header: Header::from_lz77(&lz77),
             options: deflate::EncodeOptions::with_lz77(lz77),
         }
     }
+
+    /// Disables LZ77 compression.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().no_compression();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn no_compression(mut self) -> Self {
         self.options = self.options.no_compression();
         self.header.compression_level = CompressionLevel::Fastest;
         self
     }
+
+    /// Specifies the hint of the size of a DEFLATE block.
+    ///
+    /// The default value is `deflate::DEFAULT_BLOCK_SIZE`.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().block_size(512 * 1024);
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn block_size(mut self, size: usize) -> Self {
         self.options = self.options.block_size(size);
         self
     }
-    pub fn dynamic_huffman_codes(mut self) -> Self {
-        self.options = self.options.dynamic_huffman_codes();
-        self
-    }
+
+    /// Specifies to compress with fixed huffman codes.
+    ///
+    /// # Example
+    /// ```
+    /// use libflate::lz77::DefaultLz77Encoder;
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().fixed_huffman_codes();
+    /// let encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// ```
     pub fn fixed_huffman_codes(mut self) -> Self {
         self.options = self.options.fixed_huffman_codes();
         self
     }
 }
 
+/// ZLIB encoder.
 #[derive(Debug)]
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
@@ -287,6 +459,22 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     where W: io::Write
 {
+    /// Makes a new encoder instance.
+    ///
+    /// Encoded ZLIB stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::zlib::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new()).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [120, 156, 5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
+    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0, 28, 73, 4, 62]);
+    /// ```
     pub fn new(inner: W) -> io::Result<Self> {
         Self::with_options(inner, EncodeOptions::default())
     }
@@ -295,6 +483,23 @@ impl<W, E> Encoder<W, E>
     where W: io::Write,
           E: lz77::Lz77Encode
 {
+    /// Makes a new encoder instance with specified options.
+    ///
+    /// Encoded ZLIB stream is written to `inner`.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::zlib::{Encoder, EncodeOptions};
+    ///
+    /// let options = EncodeOptions::new().no_compression();
+    /// let mut encoder = Encoder::with_options(Vec::new(), options).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [120, 1, 1, 12, 0, 243, 255, 72, 101, 108, 108, 111, 32, 87, 111,
+    ///             114, 108, 100, 33, 28, 73, 4, 62]);
+    /// ```
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));
         Ok(Encoder {
@@ -303,9 +508,34 @@ impl<W, E> Encoder<W, E>
             adler32: checksum::Adler32::new(),
         })
     }
+
+    /// Returns the header of the ZLIB stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::zlib::{Encoder, Lz77WindowSize};
+    ///
+    /// let encoder = Encoder::new(Vec::new()).unwrap();
+    /// assert_eq!(encoder.header().window_size(), Lz77WindowSize::KB32);
+    /// ```
     pub fn header(&self) -> &Header {
         &self.header
     }
+
+    /// Writes the ZLIB trailer and returns the inner stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Write;
+    /// use libflate::zlib::Encoder;
+    ///
+    /// let mut encoder = Encoder::new(Vec::new()).unwrap();
+    /// encoder.write_all(b"Hello World!").unwrap();
+    ///
+    /// assert_eq!(encoder.finish().into_result().unwrap(),
+    ///            [120, 156, 5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
+    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0, 28, 73, 4, 62]);
+    /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
         match inner.write_u32::<BigEndian>(self.adler32.value())
@@ -328,17 +558,17 @@ impl<W> io::Write for Encoder<W>
     }
 }
 
-pub fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
-    let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
-    let mut buf = Vec::with_capacity(buf.len());
-    try!(io::copy(&mut decoder, &mut buf));
-    Ok(buf)
-}
-
 #[cfg(test)]
 mod test {
     use std::io;
     use super::*;
+
+    fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
+        let mut buf = Vec::with_capacity(buf.len());
+        try!(io::copy(&mut decoder, &mut buf));
+        Ok(buf)
+    }
 
     #[test]
     fn decode_works() {

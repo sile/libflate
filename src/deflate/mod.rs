@@ -1,6 +1,7 @@
 pub use self::decode::Decoder;
 pub use self::encode::Encoder;
 pub use self::encode::EncodeOptions;
+pub use self::encode::DEFAULT_BLOCK_SIZE;
 
 mod decode;
 mod encode;

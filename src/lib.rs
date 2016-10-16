@@ -21,8 +21,8 @@ macro_rules! finish_try {
 }
 
 pub mod lz77;
-pub mod gzip;
 pub mod zlib;
+pub mod gzip;
 pub mod deflate;
 
 mod bit;
