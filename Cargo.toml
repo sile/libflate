@@ -2,9 +2,16 @@
 name = "libflate"
 version = "0.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+description = "A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP)"
+documentation = "http://sile.github.io/rustdocs/libflate/libflate/"
+homepage = "https://github.com/sile/libflate"
+repository = "https://github.com/sile/libflate"
+readme = "README.md"
+keywords = ["deflate", "gzip", "zlib"]
+license = "MIT"
 
 [dependencies]
-byteorder = "*"
+byteorder = "0.5"
 
 [dev-dependencies]
-clap = "*"
+clap = "2.14"
