@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate flate2;
+extern crate inflate;
 extern crate libflate;
 
 use std::fs;
@@ -15,6 +16,7 @@ fn main() {
             .index(1)
             .required(true))
         .arg(Arg::with_name("DISABLE_FLATE2").long("disable-flate2"))
+        .arg(Arg::with_name("DISABLE_INFLATE").long("disable-inflate"))
         .arg(Arg::with_name("DISABLE_LIBFLATE").long("disable-libflate"))
         .get_matches();
 
@@ -52,6 +54,11 @@ fn main() {
     if !matches.is_present("DISABLE_FLATE2") {
         bench("-   flate2",
               flate2::read::DeflateDecoder::new(io::Cursor::new(&compressed)),
+              BenchWriter::new());
+    }
+    if !matches.is_present("DISABLE_INFLATE") {
+        bench("-  inflate",
+              InflateReader::new(io::Cursor::new(&compressed)),
               BenchWriter::new());
     }
     println!("");
@@ -102,5 +109,57 @@ impl From<libflate::deflate::Encoder<BenchWriter>> for BenchWriter {
 impl From<flate2::write::DeflateEncoder<BenchWriter>> for BenchWriter {
     fn from(f: flate2::write::DeflateEncoder<BenchWriter>) -> Self {
         f.finish().unwrap()
+    }
+}
+
+struct InflateReader<R> {
+    reader: R,
+    inflate: inflate::InflateStream,
+    input_buf: Vec<u8>,
+    input_offset: usize,
+    output_buf: Vec<u8>,
+    output_offset: usize,
+}
+impl<R> InflateReader<R>
+    where R: io::Read
+{
+    pub fn new(reader: R) -> Self {
+        InflateReader {
+            reader: reader,
+            inflate: inflate::InflateStream::new(),
+            input_buf: Vec::new(),
+            input_offset: 0,
+            output_buf: Vec::new(),
+            output_offset: 0,
+        }
+    }
+}
+impl<R> io::Read for InflateReader<R>
+    where R: io::Read
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.input_buf.is_empty() {
+            try!(self.reader.read_to_end(&mut self.input_buf));
+        }
+        if !self.output_buf.is_empty() {
+            let len = std::cmp::min(buf.len(), self.output_buf.len() - self.output_offset);
+            buf[0..len]
+                .copy_from_slice(&self.output_buf[self.output_offset..self.output_offset + len]);
+            self.output_offset += len;
+            if self.output_offset == self.output_buf.len() {
+                self.output_buf.clear();
+                self.output_offset = 0;
+            }
+            return Ok(len);
+        }
+        let size = {
+            let (size, output) = try!(self.inflate
+                .update(&self.input_buf[self.input_offset..])
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+            self.input_offset += size;
+            self.output_buf.extend_from_slice(output);
+            size
+        };
+        if size == 0 { Ok(0) } else { self.read(buf) }
     }
 }

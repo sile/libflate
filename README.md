@@ -44,7 +44,8 @@ fn main() {
 An Informal Benchmark
 ---------------------
 
-A brief comparison with [flate2](https://github.com/alexcrichton/flate2-rs):
+A brief comparison with [flate2](https://github.com/alexcrichton/flate2-rs) and
+[inflate](https://github.com/PistonDevelopers/inflate):
 ```bash
 $ cd libflate/flate_bench/
 $ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
@@ -60,6 +61,7 @@ $ cargo run --release -- enwiki-latest-all-titles-in-ns0
 # DECODE (input_size=72043928)
 - libflate: elapsed=1.711679s, size=268799390
 -   flate2: elapsed=0.975283s, size=268799390
+-  inflate: elapsed=1.918320s, size=268799390
 ```
 
 References
