@@ -295,7 +295,12 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         try!(writer.write_bits(5, distance_code_count - 1));
         try!(writer.write_bits(4, bitwidth_code_count - 4));
         for &i in BITWIDTH_CODE_ORDER.iter().take(bitwidth_code_count as usize) {
-            try!(writer.write_bits(3, bitwidth_encoder.lookup(i as u16).width as u16));
+            let width = if code_counts[i] == 0 {
+                0
+            } else {
+                bitwidth_encoder.lookup(i as u16).width as u16
+            };
+            try!(writer.write_bits(3, width));
         }
         for &(code, bits, extra) in &codes {
             try!(bitwidth_encoder.encode(writer, code as u16));
