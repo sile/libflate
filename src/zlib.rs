@@ -567,6 +567,19 @@ mod test {
         try!(io::copy(&mut decoder, &mut buf));
         Ok(buf)
     }
+    fn default_encode(buf: &[u8]) -> io::Result<Vec<u8>> {
+        let mut encoder = Encoder::new(Vec::new()).unwrap();
+        io::copy(&mut &buf[..], &mut encoder).unwrap();
+        encoder.finish().into_result()
+    }
+    macro_rules! assert_encode_decode {
+        ($input:expr) => {
+            {
+                let encoded = default_encode(&$input[..]).unwrap();
+                assert_eq!(decode_all(&encoded).unwrap(), &$input[..]);
+            }
+        }
+    }
 
     #[test]
     fn decode_works() {
@@ -617,5 +630,21 @@ mod test {
                         100, 33, 28, 73, 4, 62];
         assert_eq!(encoded, expected);
         assert_eq!(decode_all(&encoded).unwrap(), plain);
+    }
+
+    #[test]
+    fn test_issue_2() {
+        // See: https://github.com/sile/libflate/issues/2
+        assert_encode_decode!([163, 181, 167, 40, 62, 239, 41, 125, 189, 217, 61, 122, 20, 136,
+                               160, 178, 119, 217, 41, 125, 189, 97, 195, 101, 47, 170]);
+        assert_encode_decode!([162, 58, 99, 211, 7, 64, 96, 36, 57, 155, 53, 166, 76, 14, 238,
+                               66, 148, 154, 124, 162, 58, 99, 188, 138, 131, 171, 189, 54, 229,
+                               192, 38, 29, 240, 122, 28]);
+        assert_encode_decode!([239, 238, 212, 42, 5, 46, 186, 67, 122, 247, 30, 61, 219, 62, 228,
+                               202, 164, 205, 139, 109, 99, 181, 99, 181, 99, 122, 30, 12, 62,
+                               46, 27, 145, 241, 183, 137]);
+        assert_encode_decode!([88, 202, 64, 12, 125, 108, 153, 49, 164, 250, 71, 19, 4, 108, 111,
+                               108, 237, 205, 208, 77, 217, 100, 118, 49, 10, 64, 12, 125, 51,
+                               202, 69, 67, 181, 146, 86]);
     }
 }
