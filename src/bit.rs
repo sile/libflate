@@ -95,7 +95,8 @@ impl<R> BitReader<R>
         while (32 - self.offset) < bitwidth {
             try!(self.fill_next_u8());
         }
-        let bits = (self.last_read >> self.offset) as u16;
+        debug_assert!(self.offset < 32 || bitwidth == 0);
+        let bits = self.last_read.wrapping_shr(self.offset as u32) as u16;
         Ok(bits & ((1 << bitwidth) - 1))
     }
     #[inline(always)]
