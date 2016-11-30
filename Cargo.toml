@@ -14,4 +14,4 @@ license = "MIT"
 byteorder = "0.5"
 
 [dev-dependencies]
-clap = "2.14"
+clap = "2.19"
