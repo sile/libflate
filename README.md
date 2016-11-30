@@ -10,7 +10,7 @@ A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
 Documentation
 -------------
 
-See [RustDoc Documentation](http://sile.github.io/rustdocs/libflate/libflate/).
+See [RustDoc Documentation](https://docs.rs/crate/libflate).
 
 The documentation includes some examples.
 
@@ -28,6 +28,7 @@ An Example
 ----------
 
 Below is a command to decode GZIP stream that is read from the standard input:
+
 ```rust
 extern crate libflate;
 
@@ -46,6 +47,7 @@ An Informal Benchmark
 
 A brief comparison with [flate2](https://github.com/alexcrichton/flate2-rs) and
 [inflate](https://github.com/PistonDevelopers/inflate):
+
 ```bash
 $ cd libflate/flate_bench/
 $ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
