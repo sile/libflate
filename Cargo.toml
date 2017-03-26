@@ -11,7 +11,7 @@ keywords = ["deflate", "gzip", "zlib"]
 license = "MIT"
 
 [dependencies]
-byteorder = "0.5"
+byteorder = "1"
 
 [dev-dependencies]
-clap = "2.14"
+clap = "2"
