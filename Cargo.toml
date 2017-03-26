@@ -8,7 +8,11 @@ homepage = "https://github.com/sile/libflate"
 repository = "https://github.com/sile/libflate"
 readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
+categories = ["compression"]
 license = "MIT"
+
+[badges]
+travis-ci = {repository = "sile/libflate"}
 
 [dependencies]
 byteorder = "1"
