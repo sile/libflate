@@ -155,3 +155,24 @@ impl<R> Read for Decoder<R>
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use deflate::symbol::{HuffmanCodec, DynamicHuffmanCodec};
+
+    #[test]
+    fn test_issues_3() {
+        // see: https://github.com/sile/libflate/issues/3
+        let input = [180, 253, 73, 143, 28, 201, 150, 46, 8, 254, 150, 184, 139, 75, 18, 69, 247,
+                     32, 157, 51, 27, 141, 132, 207, 78, 210, 167, 116, 243, 160, 223, 136, 141,
+                     66, 205, 76, 221, 76, 195, 213, 84, 236, 234, 224, 78, 227, 34, 145, 221,
+                     139, 126, 232, 69, 173, 170, 208, 192, 219, 245, 67, 3, 15, 149, 120, 171,
+                     70, 53, 106, 213, 175, 23, 21, 153, 139, 254, 27, 249, 75, 234, 124, 71, 116,
+                     56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203, 119, 142, 170, 169, 138,
+                     202, 112, 228, 140, 38];
+        let mut bit_reader = ::bit::BitReader::new(&input[..]);
+        assert_eq!(bit_reader.read_bit().unwrap(), false); // not final block
+        assert_eq!(bit_reader.read_bits(2).unwrap(), 0b10); // DynamicHuffmanCodec
+        DynamicHuffmanCodec.load(&mut bit_reader).unwrap();
+    }
+}
