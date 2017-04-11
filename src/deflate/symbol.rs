@@ -339,12 +339,15 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             literal_code_bitwidthes.extend(try!(load_bitwidthes(reader, c, last)));
         }
 
-        let mut distance_code_bitwidthes = Vec::with_capacity(distance_code_count as usize);
+        let mut distance_code_bitwidthes = literal_code_bitwidthes
+            .drain(literal_code_count as usize..)
+            .collect::<Vec<_>>();
         while distance_code_bitwidthes.len() < distance_code_count as usize {
             let c = try!(bitwidth_decoder.decode(reader));
             let last = distance_code_bitwidthes.last().cloned();
             distance_code_bitwidthes.extend(try!(load_bitwidthes(reader, c, last)));
         }
+        debug_assert_eq!(distance_code_bitwidthes.len(), distance_code_count as usize);
 
         Ok(Decoder {
                literal: huffman::DecoderBuilder::from_bitwidthes(&literal_code_bitwidthes,
