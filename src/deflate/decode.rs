@@ -99,6 +99,13 @@ impl<R> Decoder<R>
                     self.buffer.push(b);
                 }
                 symbol::Symbol::Share { length, distance } => {
+                    if self.buffer.len() < distance as usize {
+                        let msg = format!("Too long backword reference: buffer.len={}, distance={}",
+                                          self.buffer.len(),
+                                          distance);
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                    }
+
                     let start = self.buffer.len() - distance as usize;
                     for i in (start..).take(length as usize) {
                         let b = unsafe { *self.buffer.get_unchecked(i) };
@@ -158,7 +165,9 @@ impl<R> Read for Decoder<R>
 
 #[cfg(test)]
 mod test {
+    use std::io;
     use deflate::symbol::{HuffmanCodec, DynamicHuffmanCodec};
+    use super::*;
 
     #[test]
     fn test_issues_3() {
@@ -174,5 +183,27 @@ mod test {
         assert_eq!(bit_reader.read_bit().unwrap(), false); // not final block
         assert_eq!(bit_reader.read_bits(2).unwrap(), 0b10); // DynamicHuffmanCodec
         DynamicHuffmanCodec.load(&mut bit_reader).unwrap();
+    }
+
+    #[test]
+    fn it_works() {
+        let input = [180, 253, 73, 143, 28, 201, 150, 46, 8, 254, 150, 184, 139, 75, 18, 69, 247,
+                     32, 157, 51, 27, 141, 132, 207, 78, 210, 167, 116, 243, 160, 223, 136, 141,
+                     66, 205, 76, 221, 76, 195, 213, 84, 236, 234, 224, 78, 227, 34, 145, 221,
+                     139, 126, 232, 69, 173, 170, 208, 192, 219, 245, 67, 3, 15, 149, 120, 171,
+                     70, 53, 106, 213, 175, 23, 21, 153, 139, 254, 27, 249, 75, 234, 124, 71, 116,
+                     56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203, 119, 142, 170, 169, 138,
+                     202, 112, 228, 140, 38, 171, 162, 88, 212, 235, 56, 136, 231, 233, 239, 113,
+                     249, 163, 252, 16, 42, 138, 49, 226, 108, 73, 28, 153];
+        let mut decoder = Decoder::new(&input[..]);
+
+        let result = io::copy(&mut decoder, &mut io::sink());
+        assert!(result.is_err());
+
+        let error = result.err().unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error
+                    .to_string()
+                    .starts_with("Too long backword reference"));
     }
 }
