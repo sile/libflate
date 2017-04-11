@@ -84,10 +84,11 @@ impl<R> BitReader<R>
     }
     #[inline(always)]
     pub fn read_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
-        self.peek_bits(bitwidth).map(|bits| {
-            self.skip_bits(bitwidth);
-            bits
-        })
+        self.peek_bits(bitwidth)
+            .map(|bits| {
+                     self.skip_bits(bitwidth);
+                     bits
+                 })
     }
     #[inline(always)]
     pub fn peek_bits(&mut self, bitwidth: u8) -> io::Result<u16> {

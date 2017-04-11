@@ -74,9 +74,9 @@ impl Lz77Encode for DefaultLz77Encoder {
                 if distance <= self.window_size as usize {
                     let length = 3 + longest_common_prefix(&self.buf, i + 3, j + 3);
                     sink.consume(Code::Pointer {
-                        length: length,
-                        backward_distance: distance as u16,
-                    });
+                                     length: length,
+                                     backward_distance: distance as u16,
+                                 });
                     i += length as usize;
                     continue;
                 }
@@ -95,7 +95,11 @@ impl Lz77Encode for DefaultLz77Encoder {
 }
 
 fn prefix(buf: &[u8]) -> [u8; 3] {
-    unsafe { [*buf.get_unchecked(0), *buf.get_unchecked(1), *buf.get_unchecked(2)] }
+    unsafe {
+        [*buf.get_unchecked(0),
+         *buf.get_unchecked(1),
+         *buf.get_unchecked(2)]
+    }
 }
 
 fn longest_common_prefix(buf: &[u8], i: usize, j: usize) -> u16 {

@@ -34,10 +34,11 @@ impl Crc32 {
         self.value
     }
     pub fn update(&mut self, buf: &[u8]) {
-        let c = buf.iter().fold(!self.value, |c, &b| {
-            let i = (c ^ b as u32) as u8 as usize;
-            (unsafe { *CRC32_TABLE.get_unchecked(i) }) ^ (c >> 8)
-        });
+        let c = buf.iter()
+            .fold(!self.value, |c, &b| {
+                let i = (c ^ b as u32) as u8 as usize;
+                (unsafe { *CRC32_TABLE.get_unchecked(i) }) ^ (c >> 8)
+            });
         self.value = !c;
     }
 }

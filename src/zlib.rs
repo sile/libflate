@@ -231,9 +231,9 @@ impl Header {
         }
         let compression_level = CompressionLevel::from_u2(flg >> 6);
         Ok(Header {
-            window_size: window_size,
-            compression_level: compression_level,
-        })
+               window_size: window_size,
+               compression_level: compression_level,
+           })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
         where W: io::Write
@@ -282,11 +282,11 @@ impl<R> Decoder<R>
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = try!(Header::read_from(&mut inner));
         Ok(Decoder {
-            header: header,
-            reader: deflate::Decoder::new(inner),
-            adler32: checksum::Adler32::new(),
-            eos: false,
-        })
+               header: header,
+               reader: deflate::Decoder::new(inner),
+               adler32: checksum::Adler32::new(),
+               eos: false,
+           })
     }
 
     /// Returns the header of the ZLIB stream.
@@ -501,10 +501,10 @@ impl<W, E> Encoder<W, E>
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));
         Ok(Encoder {
-            header: options.header,
-            writer: deflate::Encoder::with_options(inner, options.options),
-            adler32: checksum::Adler32::new(),
-        })
+               header: options.header,
+               writer: deflate::Encoder::with_options(inner, options.options),
+               adler32: checksum::Adler32::new(),
+           })
     }
 
     /// Returns the header of the ZLIB stream.
@@ -536,8 +536,9 @@ impl<W, E> Encoder<W, E>
     /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
-        match inner.write_u32::<BigEndian>(self.adler32.value())
-            .and_then(|_| inner.flush()) {
+        match inner
+                  .write_u32::<BigEndian>(self.adler32.value())
+                  .and_then(|_| inner.flush()) {
             Ok(_) => Finish::new(inner, None),
             Err(e) => Finish::new(inner, Some(e)),
         }
@@ -613,7 +614,7 @@ mod test {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder = Encoder::with_options(Vec::new(),
                                                 EncodeOptions::default().fixed_huffman_codes())
-            .unwrap();
+                .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);

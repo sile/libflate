@@ -104,9 +104,9 @@ impl Trailer {
         where R: io::Read
     {
         Ok(Trailer {
-            crc32: try!(reader.read_u32::<LittleEndian>()),
-            input_size: try!(reader.read_u32::<LittleEndian>()),
-        })
+               crc32: try!(reader.read_u32::<LittleEndian>()),
+               input_size: try!(reader.read_u32::<LittleEndian>()),
+           })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
         where W: io::Write
@@ -139,7 +139,10 @@ impl HeaderBuilder {
     /// assert_eq!(header.comment(), None);
     /// ```
     pub fn new() -> Self {
-        let modification_time = time::UNIX_EPOCH.elapsed().map(|d| d.as_secs() as u32).unwrap_or(0);
+        let modification_time = time::UNIX_EPOCH
+            .elapsed()
+            .map(|d| d.as_secs() as u32)
+            .unwrap_or(0);
         let header = Header {
             modification_time: modification_time,
             compression_level: CompressionLevel::Unknown,
@@ -318,15 +321,20 @@ impl Header {
          (F_EXTRA, self.extra_field.is_some()),
          (F_NAME, self.filename.is_some()),
          (F_COMMENT, self.comment.is_some())]
-            .iter()
-            .filter(|e| e.1)
-            .map(|e| e.0)
-            .sum()
+                .iter()
+                .filter(|e| e.1)
+                .map(|e| e.0)
+                .sum()
     }
     fn crc16(&self) -> u16 {
         let mut crc = checksum::Crc32::new();
         let mut buf = Vec::new();
-        Header { is_verified: false, ..self.clone() }.write_to(&mut buf).unwrap();
+        Header {
+                is_verified: false,
+                ..self.clone()
+            }
+            .write_to(&mut buf)
+            .unwrap();
         crc.update(&buf);
         crc.value() as u16
     }
@@ -708,11 +716,11 @@ impl<W, E> Encoder<W, E>
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         try!(options.header.write_to(&mut inner));
         Ok(Encoder {
-            header: options.header.clone(),
-            crc32: checksum::Crc32::new(),
-            input_size: 0,
-            writer: deflate::Encoder::with_options(inner, options.options),
-        })
+               header: options.header.clone(),
+               crc32: checksum::Crc32::new(),
+               input_size: 0,
+               writer: deflate::Encoder::with_options(inner, options.options),
+           })
     }
 
     /// Returns the header of the GZIP stream.
@@ -786,8 +794,9 @@ impl<R> Decoder<R>
     /// use std::io::{Cursor, Read};
     /// use libflate::gzip::Decoder;
     ///
-    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
-    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
+    ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
+    ///                     163, 28, 41, 28, 12, 0, 0, 0];
     ///
     /// let mut decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
     /// let mut buf = Vec::new();
@@ -798,11 +807,11 @@ impl<R> Decoder<R>
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = try!(Header::read_from(&mut inner));
         Ok(Decoder {
-            header: header,
-            reader: deflate::Decoder::new(inner),
-            crc32: checksum::Crc32::new(),
-            eos: false,
-        })
+               header: header,
+               reader: deflate::Decoder::new(inner),
+               crc32: checksum::Crc32::new(),
+               eos: false,
+           })
     }
 
     /// Returns the header of the GZIP stream.
@@ -812,8 +821,9 @@ impl<R> Decoder<R>
     /// use std::io::Cursor;
     /// use libflate::gzip::{Decoder, Os};
     ///
-    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
-    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
+    ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
+    ///                     163, 28, 41, 28, 12, 0, 0, 0];
     ///
     /// let decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
     /// assert_eq!(decoder.header().os(), Os::Unix);
@@ -829,8 +839,9 @@ impl<R> Decoder<R>
     /// use std::io::Cursor;
     /// use libflate::gzip::Decoder;
     ///
-    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
-    ///                     111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0];
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
+    ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
+    ///                     163, 28, 41, 28, 12, 0, 0, 0];
     ///
     /// let decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
     /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data[..]);

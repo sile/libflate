@@ -336,8 +336,12 @@ impl RawBuf {
     {
         let size = cmp::min(self.buf.len(), MAX_NON_COMPRESSED_BLOCK_SIZE);
         try!(writer.flush());
-        try!(writer.as_inner_mut().write_u16::<LittleEndian>(size as u16));
-        try!(writer.as_inner_mut().write_u16::<LittleEndian>(!size as u16));
+        try!(writer
+                 .as_inner_mut()
+                 .write_u16::<LittleEndian>(size as u16));
+        try!(writer
+                 .as_inner_mut()
+                 .write_u16::<LittleEndian>(!size as u16));
         try!(writer.as_inner_mut().write_all(&self.buf[..size]));
         self.buf.drain(0..size);
         Ok(())
@@ -389,7 +393,10 @@ impl lz77::Sink for Vec<symbol::Symbol> {
     fn consume(&mut self, code: lz77::Code) {
         let symbol = match code {
             lz77::Code::Literal(b) => symbol::Symbol::Literal(b),
-            lz77::Code::Pointer { length, backward_distance } => {
+            lz77::Code::Pointer {
+                length,
+                backward_distance,
+            } => {
                 symbol::Symbol::Share {
                     length: length,
                     distance: backward_distance,

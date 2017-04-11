@@ -39,7 +39,8 @@ pub trait Builder: Sized {
     fn restore_canonical_huffman_codes(mut self, bitwidthes: &[u8]) -> Self::Instance {
         debug_assert!(bitwidthes.len() > 0);
 
-        let mut symbols = bitwidthes.iter()
+        let mut symbols = bitwidthes
+            .iter()
             .enumerate()
             .filter(|&(_, &code_bitwidth)| code_bitwidth > 0)
             .map(|(symbol, &code_bitwidth)| (symbol as u16, code_bitwidth))
@@ -146,8 +147,12 @@ impl EncoderBuilder {
         EncoderBuilder { table: vec![Code::new(0,0); symbol_count] }
     }
     pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
-        let symbol_count =
-            bitwidthes.iter().enumerate().filter(|e| *e.1 > 0).last().map_or(0, |e| e.0) + 1;
+        let symbol_count = bitwidthes
+            .iter()
+            .enumerate()
+            .filter(|e| *e.1 > 0)
+            .last()
+            .map_or(0, |e| e.0) + 1;
         let builder = Self::new(symbol_count);
         builder.restore_canonical_huffman_codes(bitwidthes)
     }
@@ -250,18 +255,21 @@ mod length_limited_huffman_codes {
     /// Reference: https://www.ics.uci.edu/~dan/pubs/LenLimHuff.pdf
     pub fn calc(max_bitwidth: u8, frequencies: &[usize]) -> Vec<u8> {
         // NOTE: unoptimized implementation
-        let mut source = frequencies.iter()
+        let mut source = frequencies
+            .iter()
             .enumerate()
             .filter(|&(_, &f)| f > 0)
             .map(|(symbol, &weight)| Node::single(symbol as u16, weight))
             .collect::<Vec<_>>();
         source.sort_by_key(|o| o.weight);
 
-        let weighted = (0..max_bitwidth - 1)
-            .fold(source.clone(), |w, _| merge(package(w), source.clone()));
+        let weighted =
+            (0..max_bitwidth - 1).fold(source.clone(), |w, _| merge(package(w), source.clone()));
 
         let mut code_bitwidthes = vec![0; frequencies.len()];
-        for symbol in package(weighted).into_iter().flat_map(|n| n.symbols.into_iter()) {
+        for symbol in package(weighted)
+                .into_iter()
+                .flat_map(|n| n.symbols.into_iter()) {
             code_bitwidthes[symbol as usize] += 1;
         }
         code_bitwidthes
