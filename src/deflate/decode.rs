@@ -1,6 +1,7 @@
 use std::io;
 use std::io::Read;
 use std::cmp;
+use std::ptr;
 use byteorder::ReadBytesExt;
 use byteorder::LittleEndian;
 
@@ -77,7 +78,8 @@ impl<R> Decoder<R>
             Err(invalid_data_error!("LEN={} is not the one's complement of NLEN={}", len, nlen))
         } else {
             let old_len = self.buffer.len();
-            self.buffer.resize(old_len + len as usize, 0);
+            self.buffer.reserve(len as usize);
+            unsafe { self.buffer.set_len(old_len + len as usize) };
             self.bit_reader
                 .as_inner_mut()
                 .read_exact(&mut self.buffer[old_len..])?;
@@ -101,11 +103,16 @@ impl<R> Decoder<R>
                                           distance);
                         return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                     }
-
-                    let start = self.buffer.len() - distance as usize;
-                    for i in (start..).take(length as usize) {
-                        let b = unsafe { *self.buffer.get_unchecked(i) };
-                        self.buffer.push(b);
+                    let old_len = self.buffer.len();
+                    self.buffer.reserve(length as usize);
+                    unsafe {
+                        self.buffer.set_len(old_len + length as usize);
+                        let start = old_len - distance as usize;
+                        let ptr = self.buffer.as_mut_ptr();
+                        ptr_copy(ptr.offset(start as isize),
+                                 ptr.offset(old_len as isize),
+                                 length as usize,
+                                 length > distance);
                     }
                 }
                 symbol::Symbol::EndOfBlock => {
@@ -155,6 +162,17 @@ impl<R> Read for Decoder<R>
                 0b11 => Err(invalid_data_error!("btype 0x11 of DEFLATE is reserved(error) value")),
                 _ => unreachable!(),
             }
+        }
+    }
+}
+
+#[inline]
+unsafe fn ptr_copy(src: *const u8, dst: *mut u8, count: usize, is_overlapping: bool) {
+    if !is_overlapping {
+        ptr::copy_nonoverlapping(src, dst, count);
+    } else {
+        for i in 0..count {
+            ptr::copy_nonoverlapping(src.offset(i as isize), dst.offset(i as isize), 1);
         }
     }
 }
