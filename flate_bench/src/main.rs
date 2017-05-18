@@ -140,7 +140,7 @@ impl<R> io::Read for InflateReader<R>
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.input_buf.is_empty() {
-            try!(self.reader.read_to_end(&mut self.input_buf));
+            self.reader.read_to_end(&mut self.input_buf)?;
         }
         if !self.output_buf.is_empty() {
             let len = std::cmp::min(buf.len(), self.output_buf.len() - self.output_offset);
@@ -154,10 +154,9 @@ impl<R> io::Read for InflateReader<R>
             return Ok(len);
         }
         let size = {
-            let (size, output) =
-                try!(self.inflate
-                         .update(&self.input_buf[self.input_offset..])
-                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+            let (size, output) = self.inflate
+                .update(&self.input_buf[self.input_offset..])
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             self.input_offset += size;
             self.output_buf.extend_from_slice(output);
             size

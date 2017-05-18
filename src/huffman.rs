@@ -121,11 +121,11 @@ impl Decoder {
     pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
         where R: io::Read
     {
-        let code = try!(reader.peek_bits(self.eob_bitwidth));
+        let code = reader.peek_bits(self.eob_bitwidth)?;
         let mut value = unsafe { *self.table.get_unchecked(code as usize) };
         let mut bitwidth = (value & 0b11111) as u8;
         if bitwidth > self.eob_bitwidth {
-            let code = try!(reader.peek_bits(self.max_bitwidth));
+            let code = reader.peek_bits(self.max_bitwidth)?;
             value = unsafe { *self.table.get_unchecked(code as usize) };
             bitwidth = (value & 0b11111) as u8;
             if bitwidth > self.max_bitwidth {

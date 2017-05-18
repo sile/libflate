@@ -104,15 +104,15 @@ impl Trailer {
         where R: io::Read
     {
         Ok(Trailer {
-               crc32: try!(reader.read_u32::<LittleEndian>()),
-               input_size: try!(reader.read_u32::<LittleEndian>()),
+               crc32: reader.read_u32::<LittleEndian>()?,
+               input_size: reader.read_u32::<LittleEndian>()?,
            })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
         where W: io::Write
     {
-        try!(writer.write_u32::<LittleEndian>(self.crc32));
-        try!(writer.write_u32::<LittleEndian>(self.input_size));
+        writer.write_u32::<LittleEndian>(self.crc32)?;
+        writer.write_u32::<LittleEndian>(self.input_size)?;
         Ok(())
     }
 }
@@ -341,23 +341,23 @@ impl Header {
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
         where W: io::Write
     {
-        try!(writer.write_all(&GZIP_ID));
-        try!(writer.write_u8(COMPRESSION_METHOD_DEFLATE));
-        try!(writer.write_u8(self.flags()));
-        try!(writer.write_u32::<LittleEndian>(self.modification_time));
-        try!(writer.write_u8(self.compression_level.to_u8()));
-        try!(writer.write_u8(self.os.to_u8()));
+        writer.write_all(&GZIP_ID)?;
+        writer.write_u8(COMPRESSION_METHOD_DEFLATE)?;
+        writer.write_u8(self.flags())?;
+        writer.write_u32::<LittleEndian>(self.modification_time)?;
+        writer.write_u8(self.compression_level.to_u8())?;
+        writer.write_u8(self.os.to_u8())?;
         if let Some(ref x) = self.extra_field {
-            try!(x.write_to(&mut writer));
+            x.write_to(&mut writer)?;
         }
         if let Some(ref x) = self.filename {
-            try!(writer.write_all(x.as_bytes_with_nul()));
+            writer.write_all(x.as_bytes_with_nul())?;
         }
         if let Some(ref x) = self.comment {
-            try!(writer.write_all(x.as_bytes_with_nul()));
+            writer.write_all(x.as_bytes_with_nul())?;
         }
         if self.is_verified {
-            try!(writer.write_u16::<LittleEndian>(self.crc16()));
+            writer.write_u16::<LittleEndian>(self.crc16())?;
         }
         Ok(())
     }
@@ -366,34 +366,34 @@ impl Header {
     {
         let mut this = HeaderBuilder::new().finish();
         let mut id = [0; 2];
-        try!(reader.read_exact(&mut id));
+        reader.read_exact(&mut id)?;
         if id != GZIP_ID {
             return Err(invalid_data_error!("Unexpected GZIP ID: value={:?}, \
                                                     expected={:?}",
                                            id,
                                            GZIP_ID));
         }
-        let compression_method = try!(reader.read_u8());
+        let compression_method = reader.read_u8()?;
         if compression_method != COMPRESSION_METHOD_DEFLATE {
             return Err(invalid_data_error!("Compression methods other than DEFLATE(8) are \
                                             unsupported: method={}",
                                            compression_method));
         }
-        let flags = try!(reader.read_u8());
-        this.modification_time = try!(reader.read_u32::<LittleEndian>());
-        this.compression_level = CompressionLevel::from_u8(try!(reader.read_u8()));
-        this.os = Os::from_u8(try!(reader.read_u8()));
+        let flags = reader.read_u8()?;
+        this.modification_time = reader.read_u32::<LittleEndian>()?;
+        this.compression_level = CompressionLevel::from_u8(reader.read_u8()?);
+        this.os = Os::from_u8(reader.read_u8()?);
         if flags & F_EXTRA != 0 {
-            this.extra_field = Some(try!(ExtraField::read_from(&mut reader)));
+            this.extra_field = Some(ExtraField::read_from(&mut reader)?);
         }
         if flags & F_NAME != 0 {
-            this.filename = Some(try!(read_cstring(&mut reader)));
+            this.filename = Some(read_cstring(&mut reader)?);
         }
         if flags & F_COMMENT != 0 {
-            this.comment = Some(try!(read_cstring(&mut reader)));
+            this.comment = Some(read_cstring(&mut reader)?);
         }
         if flags & F_HCRC != 0 {
-            let crc = try!(reader.read_u16::<LittleEndian>());
+            let crc = reader.read_u16::<LittleEndian>()?;
             let expected = this.crc16();
             if crc != expected {
                 return Err(invalid_data_error!("CRC16 of GZIP header mismatched: value={}, \
@@ -412,7 +412,7 @@ fn read_cstring<R>(mut reader: R) -> io::Result<CString>
 {
     let mut buf = Vec::new();
     loop {
-        let b = try!(reader.read_u8());
+        let b = reader.read_u8()?;
         if b == 0 {
             return Ok(unsafe { CString::from_vec_unchecked(buf) });
         }
@@ -437,20 +437,20 @@ impl ExtraField {
             id: [0; 2],
             data: Vec::new(),
         };
-        try!(reader.read_exact(&mut extra.id));
+        reader.read_exact(&mut extra.id)?;
 
-        let data_size = try!(reader.read_u16::<LittleEndian>()) as usize;
+        let data_size = reader.read_u16::<LittleEndian>()? as usize;
         extra.data.resize(data_size, 0);
-        try!(reader.read_exact(&mut extra.data));
+        reader.read_exact(&mut extra.data)?;
 
         Ok(extra)
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
         where W: io::Write
     {
-        try!(writer.write_all(&self.id));
-        try!(writer.write_u16::<LittleEndian>(self.data.len() as u16()));
-        try!(writer.write_all(&self.data));
+        writer.write_all(&self.id)?;
+        writer.write_u16::<LittleEndian>(self.data.len() as u16())?;
+        writer.write_all(&self.data)?;
         Ok(())
     }
 }
@@ -714,7 +714,7 @@ impl<W, E> Encoder<W, E>
     ///              111, 32, 87, 111, 114, 108, 100, 33, 163, 28, 41, 28, 12, 0, 0, 0][..]);
     /// ```
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
-        try!(options.header.write_to(&mut inner));
+        options.header.write_to(&mut inner)?;
         Ok(Encoder {
                header: options.header.clone(),
                crc32: checksum::Crc32::new(),
@@ -764,7 +764,7 @@ impl<W> io::Write for Encoder<W>
     where W: io::Write
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let written_size = try!(self.writer.write(buf));
+        let written_size = self.writer.write(buf)?;
         self.crc32.update(&buf[..written_size]);
         self.input_size = self.input_size.wrapping_add(written_size as u32);
         Ok(written_size)
@@ -805,7 +805,7 @@ impl<R> Decoder<R>
     /// assert_eq!(buf, b"Hello World!");
     /// ```
     pub fn new(mut inner: R) -> io::Result<Self> {
-        let header = try!(Header::read_from(&mut inner));
+        let header = Header::read_from(&mut inner)?;
         Ok(Decoder {
                header: header,
                reader: deflate::Decoder::new(inner),
@@ -857,11 +857,11 @@ impl<R> io::Read for Decoder<R>
         if self.eos {
             Ok(0)
         } else {
-            let read_size = try!(self.reader.read(buf));
+            let read_size = self.reader.read(buf)?;
             self.crc32.update(&buf[..read_size]);
             if read_size == 0 {
                 self.eos = true;
-                let trailer = try!(Trailer::read_from(self.reader.as_inner_mut()));
+                let trailer = Trailer::read_from(self.reader.as_inner_mut())?;
                 if trailer.crc32 != self.crc32.value() {
                     Err(invalid_data_error!("CRC32 mismatched: value={}, expected={}",
                                             self.crc32.value(),
@@ -884,7 +884,7 @@ mod test {
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
-        try!(io::copy(&mut decoder, &mut buf));
+        io::copy(&mut decoder, &mut buf)?;
         Ok(buf)
     }
 

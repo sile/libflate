@@ -131,14 +131,14 @@ impl Encoder {
     pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: Symbol) -> io::Result<()>
         where W: io::Write
     {
-        try!(self.literal.encode(writer, symbol.code()));
+        self.literal.encode(writer, symbol.code())?;
         if let Some((bits, extra)) = symbol.extra_lengh() {
-            try!(writer.write_bits(bits, extra));
+            writer.write_bits(bits, extra)?;
         }
         if let Some((code, bits, extra)) = symbol.distance() {
-            try!(self.distance.encode(writer, code as u16));
+            self.distance.encode(writer, code as u16)?;
             if bits > 0 {
-                try!(writer.write_bits(bits, extra));
+                writer.write_bits(bits, extra)?;
             }
         }
         Ok(())
@@ -158,7 +158,7 @@ impl Decoder {
         self.decode_literal_or_length(reader)
             .and_then(|mut s| {
                           if let Symbol::Share { ref mut distance, .. } = s {
-                              *distance = try!(self.decode_distance(reader));
+                              *distance = self.decode_distance(reader)?;
                           }
                           Ok(s)
                       })
@@ -167,14 +167,14 @@ impl Decoder {
     fn decode_literal_or_length<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<Symbol>
         where R: io::Read
     {
-        let decoded = try!(self.literal.decode(reader));
+        let decoded = self.literal.decode(reader)?;
         match decoded {
             0...255 => Ok(Symbol::Literal(decoded as u8)),
             256 => Ok(Symbol::EndOfBlock),
             length_code => {
                 let (base, extra_bits) =
                     unsafe { *LENGTH_TABLE.get_unchecked(length_code as usize - 257) };
-                let extra = try!(reader.read_bits(extra_bits));
+                let extra = reader.read_bits(extra_bits)?;
                 Ok(Symbol::Share {
                        length: base + extra,
                        distance: 0,
@@ -186,9 +186,9 @@ impl Decoder {
     fn decode_distance<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
         where R: io::Read
     {
-        let decoded = try!(self.distance.decode(reader)) as usize;
+        let decoded = self.distance.decode(reader)? as usize;
         let (base, extra_bits) = unsafe { *DISTANCE_TABLE.get_unchecked(decoded) };
-        let extra = try!(reader.read_bits(extra_bits));
+        let extra = reader.read_bits(extra_bits)?;
         let distance = base + extra;
         Ok(distance)
     }
@@ -295,9 +295,9 @@ impl HuffmanCodec for DynamicHuffmanCodec {
                          .rev()
                          .position(|&i| bitwidth_encoder.lookup(i as u16).width > 0)
                          .map_or(0, |trailing_zeros| 19 - trailing_zeros)) as u16;
-        try!(writer.write_bits(5, literal_code_count - 257));
-        try!(writer.write_bits(5, distance_code_count - 1));
-        try!(writer.write_bits(4, bitwidth_code_count - 4));
+        writer.write_bits(5, literal_code_count - 257)?;
+        writer.write_bits(5, distance_code_count - 1)?;
+        writer.write_bits(4, bitwidth_code_count - 4)?;
         for &i in BITWIDTH_CODE_ORDER
                 .iter()
                 .take(bitwidth_code_count as usize) {
@@ -306,12 +306,12 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             } else {
                 bitwidth_encoder.lookup(i as u16).width as u16
             };
-            try!(writer.write_bits(3, width));
+            writer.write_bits(3, width)?;
         }
         for &(code, bits, extra) in &codes {
-            try!(bitwidth_encoder.encode(writer, code as u16));
+            bitwidth_encoder.encode(writer, code as u16)?;
             if bits > 0 {
-                try!(writer.write_bits(bits, extra as u16));
+                writer.write_bits(bits, extra as u16)?;
             }
         }
         Ok(())
@@ -319,33 +319,33 @@ impl HuffmanCodec for DynamicHuffmanCodec {
     fn load<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<Decoder>
         where R: io::Read
     {
-        let literal_code_count = try!(reader.read_bits(5)) + 257;
-        let distance_code_count = try!(reader.read_bits(5)) + 1;
-        let bitwidth_code_count = try!(reader.read_bits(4)) + 4;
+        let literal_code_count = reader.read_bits(5)? + 257;
+        let distance_code_count = reader.read_bits(5)? + 1;
+        let bitwidth_code_count = reader.read_bits(4)? + 4;
 
         let mut bitwidth_code_bitwidthes = [0; 19];
         for &i in BITWIDTH_CODE_ORDER
                 .iter()
                 .take(bitwidth_code_count as usize) {
-            bitwidth_code_bitwidthes[i] = try!(reader.read_bits(3)) as u8;
+            bitwidth_code_bitwidthes[i] = reader.read_bits(3)? as u8;
         }
         let bitwidth_decoder = huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes,
                                                                         None);
 
         let mut literal_code_bitwidthes = Vec::with_capacity(literal_code_count as usize);
         while literal_code_bitwidthes.len() < literal_code_count as usize {
-            let c = try!(bitwidth_decoder.decode(reader));
+            let c = bitwidth_decoder.decode(reader)?;
             let last = literal_code_bitwidthes.last().cloned();
-            literal_code_bitwidthes.extend(try!(load_bitwidthes(reader, c, last)));
+            literal_code_bitwidthes.extend(load_bitwidthes(reader, c, last)?);
         }
 
         let mut distance_code_bitwidthes = literal_code_bitwidthes
             .drain(literal_code_count as usize..)
             .collect::<Vec<_>>();
         while distance_code_bitwidthes.len() < distance_code_count as usize {
-            let c = try!(bitwidth_decoder.decode(reader));
+            let c = bitwidth_decoder.decode(reader)?;
             let last = distance_code_bitwidthes.last().cloned();
-            distance_code_bitwidthes.extend(try!(load_bitwidthes(reader, c, last)));
+            distance_code_bitwidthes.extend(load_bitwidthes(reader, c, last)?);
         }
         debug_assert_eq!(distance_code_bitwidthes.len(), distance_code_count as usize);
 
@@ -366,16 +366,16 @@ fn load_bitwidthes<R>(reader: &mut bit::BitReader<R>,
     Ok(match code {
            0...15 => Box::new(iter::once(code as u8)),
            16 => {
-               let count = try!(reader.read_bits(2)) + 3;
-               let last = try!(last.ok_or_else(|| invalid_data_error!("No preceeding value")));
+               let count = reader.read_bits(2)? + 3;
+               let last = last.ok_or_else(|| invalid_data_error!("No preceeding value"))?;
                Box::new(iter::repeat(last).take(count as usize))
            }
            17 => {
-               let zeros = try!(reader.read_bits(3)) + 3;
+               let zeros = reader.read_bits(3)? + 3;
                Box::new(iter::repeat(0).take(zeros as usize))
            }
            18 => {
-               let zeros = try!(reader.read_bits(7)) + 11;
+               let zeros = reader.read_bits(7)? + 11;
                Box::new(iter::repeat(0).take(zeros as usize))
            }
            _ => unreachable!(),

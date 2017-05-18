@@ -71,25 +71,25 @@ impl<R> Decoder<R>
 
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
-        let len = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
-        let nlen = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
+        let len = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
+        let nlen = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
         if !len != nlen {
             Err(invalid_data_error!("LEN={} is not the one's complement of NLEN={}", len, nlen))
         } else {
             let old_len = self.buffer.len();
             self.buffer.resize(old_len + len as usize, 0);
-            try!(self.bit_reader
-                     .as_inner_mut()
-                     .read_exact(&mut self.buffer[old_len..]));
+            self.bit_reader
+                .as_inner_mut()
+                .read_exact(&mut self.buffer[old_len..])?;
             Ok(())
         }
     }
     fn read_compressed_block<H>(&mut self, huffman: H) -> io::Result<()>
         where H: symbol::HuffmanCodec
     {
-        let symbol_decoder = try!(huffman.load(&mut self.bit_reader));
+        let symbol_decoder = huffman.load(&mut self.bit_reader)?;
         loop {
-            let s = try!(symbol_decoder.decode(&mut self.bit_reader));
+            let s = symbol_decoder.decode(&mut self.bit_reader)?;
             match s {
                 symbol::Symbol::Literal(b) => {
                     self.buffer.push(b);
@@ -135,21 +135,21 @@ impl<R> Read for Decoder<R>
         } else if self.eos {
             Ok(0)
         } else {
-            let bfinal = try!(self.bit_reader.read_bit());
-            let btype = try!(self.bit_reader.read_bits(2));
+            let bfinal = self.bit_reader.read_bit()?;
+            let btype = self.bit_reader.read_bits(2)?;
             self.eos = bfinal;
             self.truncate_old_buffer();
             match btype {
                 0b00 => {
-                    try!(self.read_non_compressed_block());
+                    self.read_non_compressed_block()?;
                     self.read(buf)
                 }
                 0b01 => {
-                    try!(self.read_compressed_block(symbol::FixedHuffmanCodec));
+                    self.read_compressed_block(symbol::FixedHuffmanCodec)?;
                     self.read(buf)
                 }
                 0b10 => {
-                    try!(self.read_compressed_block(symbol::DynamicHuffmanCodec));
+                    self.read_compressed_block(symbol::DynamicHuffmanCodec)?;
                     self.read(buf)
                 }
                 0b11 => Err(invalid_data_error!("btype 0x11 of DEFLATE is reserved(error) value")),

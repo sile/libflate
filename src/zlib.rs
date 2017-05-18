@@ -201,8 +201,8 @@ impl Header {
     fn read_from<R>(mut reader: R) -> io::Result<Self>
         where R: io::Read
     {
-        let cmf = try!(reader.read_u8());
-        let flg = try!(reader.read_u8());
+        let cmf = reader.read_u8()?;
+        let flg = reader.read_u8()?;
         let check = ((cmf as u16) << 8) + flg as u16;
         if check % 31 != 0 {
             return Err(invalid_data_error!("Inconsistent ZLIB check bits: `CMF({}) * 256 + \
@@ -218,13 +218,15 @@ impl Header {
                                             unsupported: method={}",
                                            compression_method));
         }
-        let window_size = try!(Lz77WindowSize::from_u4(compression_info).ok_or_else(|| {
-            invalid_data_error!("CINFO above 7 are not allowed: value={}", compression_info)
-        }));
+        let window_size = Lz77WindowSize::from_u4(compression_info)
+            .ok_or_else(|| {
+                            invalid_data_error!("CINFO above 7 are not allowed: value={}",
+                                                compression_info)
+                        })?;
 
         let dict_flag = (flg & 0b100000) != 0;
         if dict_flag {
-            let dictionary_id = try!(reader.read_u32::<BigEndian>());
+            let dictionary_id = reader.read_u32::<BigEndian>()?;
             return Err(invalid_data_error!("Preset dictionaries are not supported: \
                                             dictionary_id=0x{:X}",
                                            dictionary_id));
@@ -244,8 +246,8 @@ impl Header {
         if check % 31 != 0 {
             flg += (31 - check % 31) as u8;
         }
-        try!(writer.write_u8(cmf));
-        try!(writer.write_u8(flg));
+        writer.write_u8(cmf)?;
+        writer.write_u8(flg)?;
         Ok(())
     }
 }
@@ -280,7 +282,7 @@ impl<R> Decoder<R>
     /// assert_eq!(buf, b"Hello World!");
     /// ```
     pub fn new(mut inner: R) -> io::Result<Self> {
-        let header = try!(Header::read_from(&mut inner));
+        let header = Header::read_from(&mut inner)?;
         Ok(Decoder {
                header: header,
                reader: deflate::Decoder::new(inner),
@@ -331,10 +333,10 @@ impl<R> io::Read for Decoder<R>
         if self.eos {
             Ok(0)
         } else {
-            let read_size = try!(self.reader.read(buf));
+            let read_size = self.reader.read(buf)?;
             if read_size == 0 {
                 self.eos = true;
-                let adler32 = try!(self.reader.as_inner_mut().read_u32::<BigEndian>());
+                let adler32 = self.reader.as_inner_mut().read_u32::<BigEndian>()?;
                 if adler32 != self.adler32.value() {
                     Err(invalid_data_error!("Adler32 checksum mismatched: value={}, expected={}",
                                             self.adler32.value(),
@@ -499,7 +501,7 @@ impl<W, E> Encoder<W, E>
     ///             114, 108, 100, 33, 28, 73, 4, 62]);
     /// ```
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
-        try!(options.header.write_to(&mut inner));
+        options.header.write_to(&mut inner)?;
         Ok(Encoder {
                header: options.header,
                writer: deflate::Encoder::with_options(inner, options.options),
@@ -548,7 +550,7 @@ impl<W> io::Write for Encoder<W>
     where W: io::Write
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let written_size = try!(self.writer.write(buf));
+        let written_size = self.writer.write(buf)?;
         self.adler32.update(&buf[..written_size]);
         Ok(written_size)
     }
@@ -565,7 +567,7 @@ mod test {
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
-        try!(io::copy(&mut decoder, &mut buf));
+        io::copy(&mut decoder, &mut buf)?;
         Ok(buf)
     }
     fn default_encode(buf: &[u8]) -> io::Result<Vec<u8>> {

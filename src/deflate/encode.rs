@@ -226,7 +226,7 @@ impl<W, E> io::Write for Encoder<W, E>
           E: lz77::Lz77Encode
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        try!(self.block.write(&mut self.writer, buf));
+        self.block.write(&mut self.writer, buf)?;
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
@@ -255,19 +255,19 @@ impl<E> Block<E>
     {
         self.block_buf.append(buf);
         while self.block_buf.len() >= self.block_size {
-            try!(writer.write_bit(false));
-            try!(writer.write_bits(2, self.block_type as u16));
-            try!(self.block_buf.flush(writer));
+            writer.write_bit(false)?;
+            writer.write_bits(2, self.block_type as u16)?;
+            self.block_buf.flush(writer)?;
         }
         Ok(())
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
         where W: io::Write
     {
-        try!(writer.write_bit(true));
-        try!(writer.write_bits(2, self.block_type as u16));
-        try!(self.block_buf.flush(writer));
-        try!(writer.flush());
+        writer.write_bit(true)?;
+        writer.write_bits(2, self.block_type as u16)?;
+        self.block_buf.flush(writer)?;
+        writer.flush()?;
         Ok(())
     }
 }
@@ -335,12 +335,14 @@ impl RawBuf {
         where W: io::Write
     {
         let size = cmp::min(self.buf.len(), MAX_NON_COMPRESSED_BLOCK_SIZE);
-        try!(writer.flush());
-        try!(writer.as_inner_mut().write_u16::<LittleEndian>(size as u16));
-        try!(writer
-                 .as_inner_mut()
-                 .write_u16::<LittleEndian>(!size as u16));
-        try!(writer.as_inner_mut().write_all(&self.buf[..size]));
+        writer.flush()?;
+        writer
+            .as_inner_mut()
+            .write_u16::<LittleEndian>(size as u16)?;
+        writer
+            .as_inner_mut()
+            .write_u16::<LittleEndian>(!size as u16)?;
+        writer.as_inner_mut().write_all(&self.buf[..size])?;
         self.buf.drain(0..size);
         Ok(())
     }
@@ -378,9 +380,9 @@ impl<H, E> CompressBuf<H, E>
         self.lz77.flush(&mut self.buf);
         self.buf.push(symbol::Symbol::EndOfBlock);
         let symbol_encoder = self.huffman.build(&self.buf);
-        try!(self.huffman.save(writer, &symbol_encoder));
+        self.huffman.save(writer, &symbol_encoder)?;
         for s in self.buf.drain(..) {
-            try!(symbol_encoder.encode(writer, s));
+            symbol_encoder.encode(writer, s)?;
         }
         self.original_size = 0;
         Ok(())

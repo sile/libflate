@@ -33,17 +33,17 @@ impl<W> BitWriter<W>
     }
     pub fn flush(&mut self) -> io::Result<()> {
         while self.end > 0 {
-            try!(self.inner.write_u8(self.buf as u8));
+            self.inner.write_u8(self.buf as u8)?;
             self.buf >>= 8;
             self.end = self.end.saturating_sub(8);
         }
-        try!(self.inner.flush());
+        self.inner.flush()?;
         Ok(())
     }
     #[inline(always)]
     fn flush_if_needed(&mut self) -> io::Result<()> {
         if self.end >= 16 {
-            try!(self.inner.write_u16::<LittleEndian>(self.buf as u16));
+            self.inner.write_u16::<LittleEndian>(self.buf as u16)?;
             self.end -= 16;
             self.buf >>= 16;
         }
@@ -94,7 +94,7 @@ impl<R> BitReader<R>
     pub fn peek_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
         debug_assert!(bitwidth <= 16);
         while (32 - self.offset) < bitwidth {
-            try!(self.fill_next_u8());
+            self.fill_next_u8()?;
         }
         debug_assert!(self.offset < 32 || bitwidth == 0);
         let bits = self.last_read.wrapping_shr(self.offset as u32) as u16;
@@ -110,7 +110,7 @@ impl<R> BitReader<R>
         self.offset -= 8;
         self.last_read >>= 8;
 
-        let next = try!(self.inner.read_u8()) as u32;
+        let next = self.inner.read_u8()? as u32;
         self.last_read |= next << (32 - 8);
         Ok(())
     }
