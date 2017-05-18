@@ -10,7 +10,7 @@ A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
 Documentation
 -------------
 
-See [RustDoc Documentation](https://docs.rs/crate/libflate).
+See [RustDoc Documentation](https://docs.rs/libflate).
 
 The documentation includes some examples.
 
