@@ -13,7 +13,7 @@
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
-//! let mut decoder = Decoder::new(io::Cursor::new(encoded_data)).unwrap();
+//! let mut decoder = Decoder::new(&encoded_data[..]).unwrap();
 //! let mut decoded_data = Vec::new();
 //! decoder.read_to_end(&mut decoded_data).unwrap();
 //!
@@ -791,14 +791,14 @@ impl<R> Decoder<R>
     ///
     /// # Examples
     /// ```
-    /// use std::io::{Cursor, Read};
+    /// use std::io::Read;
     /// use libflate::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
     ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
     ///                     163, 28, 41, 28, 12, 0, 0, 0];
     ///
-    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// let mut decoder = Decoder::new(&encoded_data[..]).unwrap();
     /// let mut buf = Vec::new();
     /// decoder.read_to_end(&mut buf).unwrap();
     ///
@@ -818,14 +818,13 @@ impl<R> Decoder<R>
     ///
     /// # Examples
     /// ```
-    /// use std::io::Cursor;
     /// use libflate::gzip::{Decoder, Os};
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
     ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
     ///                     163, 28, 41, 28, 12, 0, 0, 0];
     ///
-    /// let decoder = Decoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// let decoder = Decoder::new(&encoded_data[..]).unwrap();
     /// assert_eq!(decoder.header().os(), Os::Unix);
     /// ```
     pub fn header(&self) -> &Header {
@@ -882,7 +881,7 @@ mod test {
     use super::*;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
-        let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
+        let mut decoder = Decoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
         io::copy(&mut decoder, &mut buf)?;
         Ok(buf)

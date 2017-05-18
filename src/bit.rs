@@ -151,8 +151,8 @@ mod test {
 
     #[test]
     fn reader_works() {
-        let buf = vec![0b10100101, 0b11010101];
-        let mut reader = BitReader::new(io::Cursor::new(buf));
+        let buf = [0b10100101, 0b11010101];
+        let mut reader = BitReader::new(&buf[..]);
         assert_eq!(reader.read_bit().unwrap(), true);
         assert_eq!(reader.read_bit().unwrap(), false);
         assert_eq!(reader.read_bits(8).unwrap(), 0b01101001);

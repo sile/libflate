@@ -13,7 +13,7 @@
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
-//! let mut decoder = Decoder::new(io::Cursor::new(encoded_data));
+//! let mut decoder = Decoder::new(&encoded_data[..]);
 //! let mut decoded_data = Vec::new();
 //! decoder.read_to_end(&mut decoded_data).unwrap();
 //!

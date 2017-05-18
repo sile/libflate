@@ -29,12 +29,12 @@ fn main() {
     println!("# ENCODE (input_size={})", plain.len());
     if !matches.is_present("DISABLE_LIBFLATE") {
         bench("- libflate",
-              io::Cursor::new(&plain),
+              &plain[..],
               libflate::deflate::Encoder::new(BenchWriter::new()));
     }
     if !matches.is_present("DISABLE_FLATE2") {
         bench("-   flate2",
-              io::Cursor::new(&plain),
+              &plain[..],
               flate2::write::DeflateEncoder::new(BenchWriter::new(), flate2::Compression::Default));
     }
     println!("");
@@ -49,17 +49,17 @@ fn main() {
     println!("# DECODE (input_size={})", compressed.len());
     if !matches.is_present("DISABLE_LIBFLATE") {
         bench("- libflate",
-              libflate::deflate::Decoder::new(io::Cursor::new(&compressed)),
+              libflate::deflate::Decoder::new(&compressed[..]),
               BenchWriter::new());
     }
     if !matches.is_present("DISABLE_FLATE2") {
         bench("-   flate2",
-              flate2::read::DeflateDecoder::new(io::Cursor::new(&compressed)),
+              flate2::read::DeflateDecoder::new(&compressed[..]),
               BenchWriter::new());
     }
     if !matches.is_present("DISABLE_INFLATE") {
         bench("-  inflate",
-              InflateReader::new(io::Cursor::new(&compressed)),
+              InflateReader::new(&compressed[..]),
               BenchWriter::new());
     }
     println!("");

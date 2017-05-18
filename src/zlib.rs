@@ -13,7 +13,7 @@
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
-//! let mut decoder = Decoder::new(io::Cursor::new(encoded_data)).unwrap();
+//! let mut decoder = Decoder::new(&encoded_data[..]).unwrap();
 //! let mut decoded_data = Vec::new();
 //! decoder.read_to_end(&mut decoded_data).unwrap();
 //!
@@ -269,13 +269,13 @@ impl<R> Decoder<R>
     ///
     /// # Examples
     /// ```
-    /// use std::io::{Cursor, Read};
+    /// use std::io::Read;
     /// use libflate::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
     ///                     202, 73, 81, 4, 0, 28, 73, 4, 62];
     ///
-    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data)).unwrap();
+    /// let mut decoder = Decoder::new(&encoded_data[..]).unwrap();
     /// let mut buf = Vec::new();
     /// decoder.read_to_end(&mut buf).unwrap();
     ///
@@ -295,13 +295,12 @@ impl<R> Decoder<R>
     ///
     /// # Examples
     /// ```
-    /// use std::io::Cursor;
     /// use libflate::zlib::{Decoder, CompressionLevel};
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
     ///                     202, 73, 81, 4, 0, 28, 73, 4, 62];
     ///
-    /// let decoder = Decoder::new(Cursor::new(&encoded_data)).unwrap();
+    /// let decoder = Decoder::new(&encoded_data[..]).unwrap();
     /// assert_eq!(decoder.header().compression_level(),
     ///            CompressionLevel::Default);
     /// ```
@@ -565,7 +564,7 @@ mod test {
     use super::*;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
-        let mut decoder = Decoder::new(io::Cursor::new(buf)).unwrap();
+        let mut decoder = Decoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
         io::copy(&mut decoder, &mut buf)?;
         Ok(buf)
@@ -588,7 +587,7 @@ mod test {
     fn decode_works() {
         let encoded = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28,
                        73, 4, 62];
-        let mut decoder = Decoder::new(io::Cursor::new(&encoded)).unwrap();
+        let mut decoder = Decoder::new(&encoded[..]).unwrap();
         assert_eq!(*decoder.header(),
                    Header {
                        window_size: Lz77WindowSize::KB32,

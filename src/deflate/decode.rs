@@ -29,7 +29,7 @@ impl<R> Decoder<R>
     /// use libflate::deflate::Decoder;
     ///
     /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
-    /// let mut decoder = Decoder::new(Cursor::new(&encoded_data));
+    /// let mut decoder = Decoder::new(&encoded_data[..]);
     /// let mut buf = Vec::new();
     /// decoder.read_to_end(&mut buf).unwrap();
     ///
