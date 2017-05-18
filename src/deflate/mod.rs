@@ -34,3 +34,29 @@ enum BlockType {
     Fixed = 0b01,
     Dynamic = 0b10,
 }
+
+#[cfg(test)]
+mod test {
+    use std::io::{Read, Write};
+
+    use lz77;
+    use super::*;
+
+    #[test]
+    fn encode_and_decode_works() {
+        let plain = (0..lz77::MAX_DISTANCE as u32 * 32)
+            .map(|i| i as u8)
+            .collect::<Vec<_>>();
+
+        let buffer = Vec::new();
+        let mut encoder = Encoder::new(buffer);
+        encoder.write_all(&plain[..]).expect("encode");
+        let encoded = encoder.finish().into_result().unwrap();
+
+        let mut buffer = Vec::new();
+        let mut decoder = Decoder::new(&encoded[..]);
+        decoder.read_to_end(&mut buffer).expect("decode");
+
+        assert_eq!(buffer, plain);
+    }
+}

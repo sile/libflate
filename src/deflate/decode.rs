@@ -124,9 +124,14 @@ impl<R> Decoder<R>
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
-            let new_start = self.buffer.len() - lz77::MAX_DISTANCE as usize;
-            self.buffer.drain(0..new_start);
-            self.offset = lz77::MAX_DISTANCE as usize;
+            let new_len = lz77::MAX_DISTANCE as usize;
+            unsafe {
+                let ptr = self.buffer.as_mut_ptr();
+                let src = ptr.offset((self.buffer.len() - new_len) as isize);
+                ptr::copy_nonoverlapping(src, ptr, new_len);
+            }
+            self.buffer.truncate(new_len);
+            self.offset = new_len;
         }
     }
 }
