@@ -366,18 +366,18 @@ fn load_bitwidthes<R>(reader: &mut bit::BitReader<R>,
     Ok(match code {
            0...15 => Box::new(iter::once(code as u8)),
            16 => {
-        let count = try!(reader.read_bits(2)) + 3;
-        let last = try!(last.ok_or_else(|| invalid_data_error!("No preceeding value")));
-        Box::new(iter::repeat(last).take(count as usize))
-    }
+               let count = try!(reader.read_bits(2)) + 3;
+               let last = try!(last.ok_or_else(|| invalid_data_error!("No preceeding value")));
+               Box::new(iter::repeat(last).take(count as usize))
+           }
            17 => {
-        let zeros = try!(reader.read_bits(3)) + 3;
-        Box::new(iter::repeat(0).take(zeros as usize))
-    }
+               let zeros = try!(reader.read_bits(3)) + 3;
+               Box::new(iter::repeat(0).take(zeros as usize))
+           }
            18 => {
-        let zeros = try!(reader.read_bits(7)) + 11;
-        Box::new(iter::repeat(0).take(zeros as usize))
-    }
+               let zeros = try!(reader.read_bits(7)) + 11;
+               Box::new(iter::repeat(0).take(zeros as usize))
+           }
            _ => unreachable!(),
        })
 }

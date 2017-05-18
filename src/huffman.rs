@@ -263,8 +263,8 @@ mod length_limited_huffman_codes {
             .collect::<Vec<_>>();
         source.sort_by_key(|o| o.weight);
 
-        let weighted =
-            (0..max_bitwidth - 1).fold(source.clone(), |w, _| merge(package(w), source.clone()));
+        let weighted = (0..max_bitwidth - 1)
+            .fold(source.clone(), |w, _| merge(package(w), source.clone()));
 
         let mut code_bitwidthes = vec![0; frequencies.len()];
         for symbol in package(weighted)

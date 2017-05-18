@@ -12,9 +12,7 @@ use clap::Arg;
 
 fn main() {
     let matches = App::new("flate_bench")
-        .arg(Arg::with_name("INPUT")
-            .index(1)
-            .required(true))
+        .arg(Arg::with_name("INPUT").index(1).required(true))
         .arg(Arg::with_name("DISABLE_FLATE2").long("disable-flate2"))
         .arg(Arg::with_name("DISABLE_INFLATE").long("disable-inflate"))
         .arg(Arg::with_name("DISABLE_LIBFLATE").long("disable-libflate"))
@@ -22,7 +20,10 @@ fn main() {
 
     let input_file_path = matches.value_of("INPUT").unwrap();
     let mut plain = Vec::new();
-    fs::File::open(input_file_path).unwrap().read_to_end(&mut plain).unwrap();
+    fs::File::open(input_file_path)
+        .unwrap()
+        .read_to_end(&mut plain)
+        .unwrap();
 
     println!("");
     println!("# ENCODE (input_size={})", plain.len());
@@ -153,9 +154,10 @@ impl<R> io::Read for InflateReader<R>
             return Ok(len);
         }
         let size = {
-            let (size, output) = try!(self.inflate
-                .update(&self.input_buf[self.input_offset..])
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
+            let (size, output) =
+                try!(self.inflate
+                         .update(&self.input_buf[self.input_offset..])
+                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e)));
             self.input_offset += size;
             self.output_buf.extend_from_slice(output);
             size

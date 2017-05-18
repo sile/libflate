@@ -43,8 +43,8 @@ fn main() {
     let input: Box<io::Read> = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
-        Box::new(fs::File::open(input_filename).expect(&format!("Can't open file: {}",
-                                                                input_filename)))
+        Box::new(fs::File::open(input_filename)
+                     .expect(&format!("Can't open file: {}", input_filename)))
     };
     let mut input = io::BufReader::new(input);
 
@@ -54,8 +54,8 @@ fn main() {
     } else if output_filename == "/dev/null" {
         Box::new(io::sink())
     } else {
-        Box::new(fs::File::create(output_filename).expect(&format!("Can't create file: {}",
-                                                                   output_filename)))
+        Box::new(fs::File::create(output_filename)
+                     .expect(&format!("Can't create file: {}", output_filename)))
     };
     let mut output = io::BufWriter::new(output);
 

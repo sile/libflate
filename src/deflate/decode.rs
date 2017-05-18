@@ -71,12 +71,8 @@ impl<R> Decoder<R>
 
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
-        let len = try!(self.bit_reader
-                           .as_inner_mut()
-                           .read_u16::<LittleEndian>());
-        let nlen = try!(self.bit_reader
-                            .as_inner_mut()
-                            .read_u16::<LittleEndian>());
+        let len = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
+        let nlen = try!(self.bit_reader.as_inner_mut().read_u16::<LittleEndian>());
         if !len != nlen {
             Err(invalid_data_error!("LEN={} is not the one's complement of NLEN={}", len, nlen))
         } else {
@@ -202,8 +198,6 @@ mod test {
 
         let error = result.err().unwrap();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-        assert!(error
-                    .to_string()
-                    .starts_with("Too long backword reference"));
+        assert!(error.to_string().starts_with("Too long backword reference"));
     }
 }

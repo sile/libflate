@@ -336,9 +336,7 @@ impl RawBuf {
     {
         let size = cmp::min(self.buf.len(), MAX_NON_COMPRESSED_BLOCK_SIZE);
         try!(writer.flush());
-        try!(writer
-                 .as_inner_mut()
-                 .write_u16::<LittleEndian>(size as u16));
+        try!(writer.as_inner_mut().write_u16::<LittleEndian>(size as u16));
         try!(writer
                  .as_inner_mut()
                  .write_u16::<LittleEndian>(!size as u16));
