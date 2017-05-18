@@ -152,45 +152,43 @@ pub struct Decoder {
 }
 impl Decoder {
     #[inline(always)]
-    pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<Symbol>
+    pub fn decode_unchecked<R>(&self, reader: &mut bit::BitReader<R>) -> Symbol
         where R: io::Read
     {
-        self.decode_literal_or_length(reader)
-            .and_then(|mut s| {
-                          if let Symbol::Share { ref mut distance, .. } = s {
-                              *distance = self.decode_distance(reader)?;
-                          }
-                          Ok(s)
-                      })
+        let mut symbol = self.decode_literal_or_length(reader);
+        if let Symbol::Share { ref mut distance, .. } = symbol {
+            *distance = self.decode_distance(reader);
+        }
+        symbol
     }
     #[inline(always)]
-    fn decode_literal_or_length<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<Symbol>
+    fn decode_literal_or_length<R>(&self, reader: &mut bit::BitReader<R>) -> Symbol
         where R: io::Read
     {
-        let decoded = self.literal.decode(reader)?;
+        let decoded = self.literal.decode_unchecked(reader);
         match decoded {
-            0...255 => Ok(Symbol::Literal(decoded as u8)),
-            256 => Ok(Symbol::EndOfBlock),
+            0...255 => Symbol::Literal(decoded as u8),
+            256 => Symbol::EndOfBlock,
             length_code => {
                 let (base, extra_bits) =
                     unsafe { *LENGTH_TABLE.get_unchecked(length_code as usize - 257) };
-                let extra = reader.read_bits(extra_bits)?;
-                Ok(Symbol::Share {
-                       length: base + extra,
-                       distance: 0,
-                   })
+                let extra = reader.read_bits_unchecked(extra_bits);
+                Symbol::Share {
+                    length: base + extra,
+                    distance: 0,
+                }
             }
         }
     }
     #[inline(always)]
-    fn decode_distance<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
+    fn decode_distance<R>(&self, reader: &mut bit::BitReader<R>) -> u16
         where R: io::Read
     {
-        let decoded = self.distance.decode(reader)? as usize;
+        let decoded = self.distance.decode_unchecked(reader) as usize;
         let (base, extra_bits) = unsafe { *DISTANCE_TABLE.get_unchecked(decoded) };
-        let extra = reader.read_bits(extra_bits)?;
+        let extra = reader.read_bits_unchecked(extra_bits);
         let distance = base + extra;
-        Ok(distance)
+        distance
     }
 }
 

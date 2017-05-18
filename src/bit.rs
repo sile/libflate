@@ -67,6 +67,7 @@ pub struct BitReader<R> {
     inner: R,
     last_read: u32,
     offset: u8,
+    last_error: Option<io::Error>,
 }
 impl<R> BitReader<R>
     where R: io::Read
@@ -76,6 +77,19 @@ impl<R> BitReader<R>
             inner: inner,
             last_read: 0,
             offset: 32,
+            last_error: None,
+        }
+    }
+    #[inline(always)]
+    pub fn set_last_error(&mut self, e: io::Error) {
+        self.last_error = Some(e);
+    }
+    #[inline(always)]
+    pub fn check_last_error(&mut self) -> io::Result<()> {
+        if let Some(e) = self.last_error.take() {
+            Err(e)
+        } else {
+            Ok(())
         }
     }
     #[inline(always)]
@@ -84,21 +98,30 @@ impl<R> BitReader<R>
     }
     #[inline(always)]
     pub fn read_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
-        self.peek_bits(bitwidth)
-            .map(|bits| {
-                     self.skip_bits(bitwidth);
-                     bits
-                 })
+        let v = self.read_bits_unchecked(bitwidth);
+        self.check_last_error().map(|_| v)
     }
     #[inline(always)]
-    pub fn peek_bits(&mut self, bitwidth: u8) -> io::Result<u16> {
+    pub fn read_bits_unchecked(&mut self, bitwidth: u8) -> u16 {
+        let bits = self.peek_bits_unchecked(bitwidth);
+        self.skip_bits(bitwidth);
+        bits
+    }
+    #[inline(always)]
+    pub fn peek_bits_unchecked(&mut self, bitwidth: u8) -> u16 {
         debug_assert!(bitwidth <= 16);
         while (32 - self.offset) < bitwidth {
-            self.fill_next_u8()?;
+            if self.last_error.is_some() {
+                return 0;
+            }
+            if let Err(e) = self.fill_next_u8() {
+                self.last_error = Some(e);
+                return 0;
+            }
         }
         debug_assert!(self.offset < 32 || bitwidth == 0);
         let bits = self.last_read.wrapping_shr(self.offset as u32) as u16;
-        Ok(bits & ((1 << bitwidth) - 1))
+        bits & ((1 << bitwidth) - 1)
     }
     #[inline(always)]
     pub fn skip_bits(&mut self, bitwidth: u8) {
@@ -156,10 +179,10 @@ mod test {
         assert_eq!(reader.read_bit().unwrap(), true);
         assert_eq!(reader.read_bit().unwrap(), false);
         assert_eq!(reader.read_bits(8).unwrap(), 0b01101001);
-        assert_eq!(reader.peek_bits(3).unwrap(), 0b101);
-        assert_eq!(reader.peek_bits(3).unwrap(), 0b101);
+        assert_eq!(reader.peek_bits_unchecked(3), 0b101);
+        assert_eq!(reader.peek_bits_unchecked(3), 0b101);
         reader.skip_bits(1);
-        assert_eq!(reader.peek_bits(3).unwrap(), 0b010);
+        assert_eq!(reader.peek_bits_unchecked(3), 0b010);
         assert_eq!(reader.read_bits(8).map_err(|e| e.kind()),
                    Err(io::ErrorKind::UnexpectedEof));
     }

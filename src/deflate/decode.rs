@@ -91,7 +91,8 @@ impl<R> Decoder<R>
     {
         let symbol_decoder = huffman.load(&mut self.bit_reader)?;
         loop {
-            let s = symbol_decoder.decode(&mut self.bit_reader)?;
+            let s = symbol_decoder.decode_unchecked(&mut self.bit_reader);
+            self.bit_reader.check_last_error()?;
             match s {
                 symbol::Symbol::Literal(b) => {
                     self.buffer.push(b);

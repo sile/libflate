@@ -121,20 +121,29 @@ impl Decoder {
     pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
         where R: io::Read
     {
-        let code = reader.peek_bits(self.eob_bitwidth)?;
+        let v = self.decode_unchecked(reader);
+        reader.check_last_error()?;
+        Ok(v)
+    }
+
+    #[inline(always)]
+    pub fn decode_unchecked<R>(&self, reader: &mut bit::BitReader<R>) -> u16
+        where R: io::Read
+    {
+        let code = reader.peek_bits_unchecked(self.eob_bitwidth);
         let mut value = unsafe { *self.table.get_unchecked(code as usize) };
         let mut bitwidth = (value & 0b11111) as u8;
         if bitwidth > self.eob_bitwidth {
-            let code = reader.peek_bits(self.max_bitwidth)?;
+            let code = reader.peek_bits_unchecked(self.max_bitwidth);
             value = unsafe { *self.table.get_unchecked(code as usize) };
             bitwidth = (value & 0b11111) as u8;
             if bitwidth > self.max_bitwidth {
-                return Err(invalid_data_error!("Invalid huffman coded stream"));
+                reader.set_last_error(invalid_data_error!("Invalid huffman coded stream"));
             }
         }
         reader.skip_bits(bitwidth as u8);
         let symbol = value >> 5;
-        Ok(symbol)
+        symbol
     }
 }
 
