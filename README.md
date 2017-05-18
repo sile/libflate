@@ -53,18 +53,18 @@ A brief comparison with [flate2](https://github.com/alexcrichton/flate2-rs) and
 $ cd libflate/flate_bench/
 $ curl -O https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-all-titles-in-ns0.gz
 $ gzip -d enwiki-latest-all-titles-in-ns0.gz
-$ ls -lh enwiki-latest-all-titles-in-ns0
--rw-rw-rw- 1 foo foo 257M 10月  3 17:22 enwiki-latest-all-titles-in-ns0
+> ls -lh enwiki-latest-all-titles-in-ns0
+-rw-rw-r-- 1 foo foo 265M May 18 05:19 enwiki-latest-all-titles-in-ns0
 
 $ cargo run --release -- enwiki-latest-all-titles-in-ns0
-# ENCODE (input_size=268799390)
-- libflate: elapsed= 6.487679s, size=93326863
--   flate2: elapsed=10.715379s, size=72043928
+# ENCODE (input_size=277303937)
+- libflate: elapsed=6.704266s, size=96128630
+-   flate2: elapsed=11.437189s, size=74217004
 
-# DECODE (input_size=72043928)
-- libflate: elapsed=1.711679s, size=268799390
--   flate2: elapsed=0.975283s, size=268799390
--  inflate: elapsed=1.918320s, size=268799390
+# DECODE (input_size=74217004)
+- libflate: elapsed=1.354556s, size=277303937
+-   flate2: elapsed=0.960907s, size=277303937
+-  inflate: elapsed=1.926142s, size=277303937
 ```
 
 References
