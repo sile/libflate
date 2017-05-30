@@ -449,7 +449,7 @@ impl ExtraField {
         where W: io::Write
     {
         writer.write_all(&self.id)?;
-        writer.write_u16::<LittleEndian>(self.data.len() as u16())?;
+        writer.write_u16::<LittleEndian>(self.data.len() as u16)?;
         writer.write_all(&self.data)?;
         Ok(())
     }
