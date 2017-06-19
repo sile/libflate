@@ -437,10 +437,14 @@ impl ExtraField {
             id: [0; 2],
             data: Vec::new(),
         };
+        let data_size = reader.read_u16::<LittleEndian>()? as usize;
+        if data_size < 2 {
+            return Err(invalid_data_error!("extra field is too short: {}", data_size));
+        }
+
         reader.read_exact(&mut extra.id)?;
 
-        let data_size = reader.read_u16::<LittleEndian>()? as usize;
-        extra.data.resize(data_size, 0);
+        extra.data.resize(data_size - 2, 0);
         reader.read_exact(&mut extra.data)?;
 
         Ok(extra)
