@@ -54,7 +54,8 @@ impl DefaultLz77Encoder {
 }
 impl Lz77Encode for DefaultLz77Encoder {
     fn encode<S>(&mut self, buf: &[u8], sink: S)
-        where S: Sink
+    where
+        S: Sink,
     {
         self.buf.extend_from_slice(buf);
         if self.buf.len() >= self.window_size as usize * 8 {
@@ -62,7 +63,8 @@ impl Lz77Encode for DefaultLz77Encoder {
         }
     }
     fn flush<S>(&mut self, mut sink: S)
-        where S: Sink
+    where
+        S: Sink,
     {
         let mut prefix_table = HashMap::new();
         let mut i = 0;
@@ -74,9 +76,9 @@ impl Lz77Encode for DefaultLz77Encoder {
                 if distance <= self.window_size as usize {
                     let length = 3 + longest_common_prefix(&self.buf, i + 3, j + 3);
                     sink.consume(Code::Pointer {
-                                     length: length,
-                                     backward_distance: distance as u16,
-                                 });
+                        length: length,
+                        backward_distance: distance as u16,
+                    });
                     i += length as usize;
                     continue;
                 }
@@ -96,9 +98,11 @@ impl Lz77Encode for DefaultLz77Encoder {
 
 fn prefix(buf: &[u8]) -> [u8; 3] {
     unsafe {
-        [*buf.get_unchecked(0),
-         *buf.get_unchecked(1),
-         *buf.get_unchecked(2)]
+        [
+            *buf.get_unchecked(0),
+            *buf.get_unchecked(1),
+            *buf.get_unchecked(2),
+        ]
     }
 }
 

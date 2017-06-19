@@ -191,7 +191,8 @@ impl Header {
         self.compression_level.clone()
     }
     fn from_lz77<E>(lz77: &E) -> Self
-        where E: lz77::Lz77Encode
+    where
+        E: lz77::Lz77Encode,
     {
         Header {
             compression_level: From::from(lz77.compression_level()),
@@ -199,46 +200,52 @@ impl Header {
         }
     }
     fn read_from<R>(mut reader: R) -> io::Result<Self>
-        where R: io::Read
+    where
+        R: io::Read,
     {
         let cmf = reader.read_u8()?;
         let flg = reader.read_u8()?;
         let check = ((cmf as u16) << 8) + flg as u16;
         if check % 31 != 0 {
-            return Err(invalid_data_error!("Inconsistent ZLIB check bits: `CMF({}) * 256 + \
+            return Err(invalid_data_error!(
+                "Inconsistent ZLIB check bits: `CMF({}) * 256 + \
                                             FLG({})` must be a multiple of 31",
-                                           cmf,
-                                           flg));
+                cmf,
+                flg
+            ));
         }
 
         let compression_method = cmf & 0b1111;
         let compression_info = cmf >> 4;
         if compression_method != COMPRESSION_METHOD_DEFLATE {
-            return Err(invalid_data_error!("Compression methods other than DEFLATE(8) are \
+            return Err(invalid_data_error!(
+                "Compression methods other than DEFLATE(8) are \
                                             unsupported: method={}",
-                                           compression_method));
+                compression_method
+            ));
         }
-        let window_size = Lz77WindowSize::from_u4(compression_info)
-            .ok_or_else(|| {
-                            invalid_data_error!("CINFO above 7 are not allowed: value={}",
-                                                compression_info)
-                        })?;
+        let window_size = Lz77WindowSize::from_u4(compression_info).ok_or_else(|| {
+            invalid_data_error!("CINFO above 7 are not allowed: value={}", compression_info)
+        })?;
 
         let dict_flag = (flg & 0b100000) != 0;
         if dict_flag {
             let dictionary_id = reader.read_u32::<BigEndian>()?;
-            return Err(invalid_data_error!("Preset dictionaries are not supported: \
+            return Err(invalid_data_error!(
+                "Preset dictionaries are not supported: \
                                             dictionary_id=0x{:X}",
-                                           dictionary_id));
+                dictionary_id
+            ));
         }
         let compression_level = CompressionLevel::from_u2(flg >> 6);
         Ok(Header {
-               window_size: window_size,
-               compression_level: compression_level,
-           })
+            window_size: window_size,
+            compression_level: compression_level,
+        })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         let cmf = (self.window_size.as_u4() << 4) | COMPRESSION_METHOD_DEFLATE;
         let mut flg = self.compression_level.as_u2() << 6;
@@ -261,7 +268,8 @@ pub struct Decoder<R> {
     eos: bool,
 }
 impl<R> Decoder<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     /// Makes a new decoder instance.
     ///
@@ -284,11 +292,11 @@ impl<R> Decoder<R>
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = Header::read_from(&mut inner)?;
         Ok(Decoder {
-               header: header,
-               reader: deflate::Decoder::new(inner),
-               adler32: checksum::Adler32::new(),
-               eos: false,
-           })
+            header: header,
+            reader: deflate::Decoder::new(inner),
+            adler32: checksum::Adler32::new(),
+            eos: false,
+        })
     }
 
     /// Returns the header of the ZLIB stream.
@@ -326,7 +334,8 @@ impl<R> Decoder<R>
     }
 }
 impl<R> io::Read for Decoder<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.eos {
@@ -337,9 +346,11 @@ impl<R> io::Read for Decoder<R>
                 self.eos = true;
                 let adler32 = self.reader.as_inner_mut().read_u32::<BigEndian>()?;
                 if adler32 != self.adler32.value() {
-                    Err(invalid_data_error!("Adler32 checksum mismatched: value={}, expected={}",
-                                            self.adler32.value(),
-                                            adler32))
+                    Err(invalid_data_error!(
+                        "Adler32 checksum mismatched: value={}, expected={}",
+                        self.adler32.value(),
+                        adler32
+                    ))
                 } else {
                     Ok(0)
                 }
@@ -354,7 +365,8 @@ impl<R> io::Read for Decoder<R>
 /// Options for a ZLIB encoder.
 #[derive(Debug)]
 pub struct EncodeOptions<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
@@ -382,7 +394,8 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl<E> EncodeOptions<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     /// Specifies the LZ77 encoder used to compress input data.
     ///
@@ -456,7 +469,8 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     adler32: checksum::Adler32,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
-    where W: io::Write
+where
+    W: io::Write,
 {
     /// Makes a new encoder instance.
     ///
@@ -479,8 +493,9 @@ impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     }
 }
 impl<W, E> Encoder<W, E>
-    where W: io::Write,
-          E: lz77::Lz77Encode
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
 {
     /// Makes a new encoder instance with specified options.
     ///
@@ -502,10 +517,10 @@ impl<W, E> Encoder<W, E>
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
-               header: options.header,
-               writer: deflate::Encoder::with_options(inner, options.options),
-               adler32: checksum::Adler32::new(),
-           })
+            header: options.header,
+            writer: deflate::Encoder::with_options(inner, options.options),
+            adler32: checksum::Adler32::new(),
+        })
     }
 
     /// Returns the header of the ZLIB stream.
@@ -538,15 +553,16 @@ impl<W, E> Encoder<W, E>
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
         match inner
-                  .write_u32::<BigEndian>(self.adler32.value())
-                  .and_then(|_| inner.flush()) {
+            .write_u32::<BigEndian>(self.adler32.value())
+            .and_then(|_| inner.flush()) {
             Ok(_) => Finish::new(inner, None),
             Err(e) => Finish::new(inner, Some(e)),
         }
     }
 }
 impl<W> io::Write for Encoder<W>
-    where W: io::Write
+where
+    W: io::Write,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let written_size = self.writer.write(buf)?;
@@ -585,14 +601,36 @@ mod test {
 
     #[test]
     fn decode_works() {
-        let encoded = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28,
-                       73, 4, 62];
+        let encoded = [
+            120,
+            156,
+            243,
+            72,
+            205,
+            201,
+            201,
+            87,
+            8,
+            207,
+            47,
+            202,
+            73,
+            81,
+            4,
+            0,
+            28,
+            73,
+            4,
+            62,
+        ];
         let mut decoder = Decoder::new(&encoded[..]).unwrap();
-        assert_eq!(*decoder.header(),
-                   Header {
-                       window_size: Lz77WindowSize::KB32,
-                       compression_level: CompressionLevel::Default,
-                   });
+        assert_eq!(
+            *decoder.header(),
+            Header {
+                window_size: Lz77WindowSize::KB32,
+                compression_level: CompressionLevel::Default,
+            }
+        );
 
         let mut buf = Vec::new();
         io::copy(&mut decoder, &mut buf).unwrap();
@@ -613,8 +651,8 @@ mod test {
     #[test]
     fn best_speed_encode_works() {
         let plain = b"Hello World! Hello ZLIB!!";
-        let mut encoder = Encoder::with_options(Vec::new(),
-                                                EncodeOptions::default().fixed_huffman_codes())
+        let mut encoder =
+            Encoder::with_options(Vec::new(), EncodeOptions::default().fixed_huffman_codes())
                 .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
@@ -628,8 +666,31 @@ mod test {
             .unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
-        let expected = [120, 1, 1, 12, 0, 243, 255, 72, 101, 108, 108, 111, 32, 87, 111, 114, 108,
-                        100, 33, 28, 73, 4, 62];
+        let expected = [
+            120,
+            1,
+            1,
+            12,
+            0,
+            243,
+            255,
+            72,
+            101,
+            108,
+            108,
+            111,
+            32,
+            87,
+            111,
+            114,
+            108,
+            100,
+            33,
+            28,
+            73,
+            4,
+            62,
+        ];
         assert_eq!(encoded, expected);
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
@@ -637,16 +698,152 @@ mod test {
     #[test]
     fn test_issue_2() {
         // See: https://github.com/sile/libflate/issues/2
-        assert_encode_decode!([163, 181, 167, 40, 62, 239, 41, 125, 189, 217, 61, 122, 20, 136,
-                               160, 178, 119, 217, 41, 125, 189, 97, 195, 101, 47, 170]);
-        assert_encode_decode!([162, 58, 99, 211, 7, 64, 96, 36, 57, 155, 53, 166, 76, 14, 238,
-                               66, 148, 154, 124, 162, 58, 99, 188, 138, 131, 171, 189, 54, 229,
-                               192, 38, 29, 240, 122, 28]);
-        assert_encode_decode!([239, 238, 212, 42, 5, 46, 186, 67, 122, 247, 30, 61, 219, 62, 228,
-                               202, 164, 205, 139, 109, 99, 181, 99, 181, 99, 122, 30, 12, 62,
-                               46, 27, 145, 241, 183, 137]);
-        assert_encode_decode!([88, 202, 64, 12, 125, 108, 153, 49, 164, 250, 71, 19, 4, 108, 111,
-                               108, 237, 205, 208, 77, 217, 100, 118, 49, 10, 64, 12, 125, 51,
-                               202, 69, 67, 181, 146, 86]);
+        assert_encode_decode!(
+            [
+                163,
+                181,
+                167,
+                40,
+                62,
+                239,
+                41,
+                125,
+                189,
+                217,
+                61,
+                122,
+                20,
+                136,
+                160,
+                178,
+                119,
+                217,
+                41,
+                125,
+                189,
+                97,
+                195,
+                101,
+                47,
+                170,
+            ]
+        );
+        assert_encode_decode!(
+            [
+                162,
+                58,
+                99,
+                211,
+                7,
+                64,
+                96,
+                36,
+                57,
+                155,
+                53,
+                166,
+                76,
+                14,
+                238,
+                66,
+                148,
+                154,
+                124,
+                162,
+                58,
+                99,
+                188,
+                138,
+                131,
+                171,
+                189,
+                54,
+                229,
+                192,
+                38,
+                29,
+                240,
+                122,
+                28,
+            ]
+        );
+        assert_encode_decode!(
+            [
+                239,
+                238,
+                212,
+                42,
+                5,
+                46,
+                186,
+                67,
+                122,
+                247,
+                30,
+                61,
+                219,
+                62,
+                228,
+                202,
+                164,
+                205,
+                139,
+                109,
+                99,
+                181,
+                99,
+                181,
+                99,
+                122,
+                30,
+                12,
+                62,
+                46,
+                27,
+                145,
+                241,
+                183,
+                137,
+            ]
+        );
+        assert_encode_decode!(
+            [
+                88,
+                202,
+                64,
+                12,
+                125,
+                108,
+                153,
+                49,
+                164,
+                250,
+                71,
+                19,
+                4,
+                108,
+                111,
+                108,
+                237,
+                205,
+                208,
+                77,
+                217,
+                100,
+                118,
+                49,
+                10,
+                64,
+                12,
+                125,
+                51,
+                202,
+                69,
+                67,
+                181,
+                146,
+                86,
+            ]
+        );
     }
 }

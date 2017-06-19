@@ -18,7 +18,8 @@ pub struct Decoder<R> {
     eos: bool,
 }
 impl<R> Decoder<R>
-    where R: Read
+where
+    R: Read,
 {
     /// Makes a new decoder instance.
     ///
@@ -75,19 +76,24 @@ impl<R> Decoder<R>
         let len = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
         let nlen = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
         if !len != nlen {
-            Err(invalid_data_error!("LEN={} is not the one's complement of NLEN={}", len, nlen))
+            Err(invalid_data_error!(
+                "LEN={} is not the one's complement of NLEN={}",
+                len,
+                nlen
+            ))
         } else {
             let old_len = self.buffer.len();
             self.buffer.reserve(len as usize);
             unsafe { self.buffer.set_len(old_len + len as usize) };
-            self.bit_reader
-                .as_inner_mut()
-                .read_exact(&mut self.buffer[old_len..])?;
+            self.bit_reader.as_inner_mut().read_exact(
+                &mut self.buffer[old_len..],
+            )?;
             Ok(())
         }
     }
     fn read_compressed_block<H>(&mut self, huffman: H) -> io::Result<()>
-        where H: symbol::HuffmanCodec
+    where
+        H: symbol::HuffmanCodec,
     {
         let symbol_decoder = huffman.load(&mut self.bit_reader)?;
         loop {
@@ -99,9 +105,11 @@ impl<R> Decoder<R>
                 }
                 symbol::Symbol::Share { length, distance } => {
                     if self.buffer.len() < distance as usize {
-                        let msg = format!("Too long backword reference: buffer.len={}, distance={}",
-                                          self.buffer.len(),
-                                          distance);
+                        let msg = format!(
+                            "Too long backword reference: buffer.len={}, distance={}",
+                            self.buffer.len(),
+                            distance
+                        );
                         return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
                     }
                     let old_len = self.buffer.len();
@@ -110,10 +118,12 @@ impl<R> Decoder<R>
                         self.buffer.set_len(old_len + length as usize);
                         let start = old_len - distance as usize;
                         let ptr = self.buffer.as_mut_ptr();
-                        ptr_copy(ptr.offset(start as isize),
-                                 ptr.offset(old_len as isize),
-                                 length as usize,
-                                 length > distance);
+                        ptr_copy(
+                            ptr.offset(start as isize),
+                            ptr.offset(old_len as isize),
+                            length as usize,
+                            length > distance,
+                        );
                     }
                 }
                 symbol::Symbol::EndOfBlock => {
@@ -137,7 +147,8 @@ impl<R> Decoder<R>
     }
 }
 impl<R> Read for Decoder<R>
-    where R: Read
+where
+    R: Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.offset < self.buffer.len() {
@@ -165,7 +176,9 @@ impl<R> Read for Decoder<R>
                     self.read_compressed_block(symbol::DynamicHuffmanCodec)?;
                     self.read(buf)
                 }
-                0b11 => Err(invalid_data_error!("btype 0x11 of DEFLATE is reserved(error) value")),
+                0b11 => Err(invalid_data_error!(
+                    "btype 0x11 of DEFLATE is reserved(error) value"
+                )),
                 _ => unreachable!(),
             }
         }
@@ -192,13 +205,111 @@ mod test {
     #[test]
     fn test_issues_3() {
         // see: https://github.com/sile/libflate/issues/3
-        let input = [180, 253, 73, 143, 28, 201, 150, 46, 8, 254, 150, 184, 139, 75, 18, 69, 247,
-                     32, 157, 51, 27, 141, 132, 207, 78, 210, 167, 116, 243, 160, 223, 136, 141,
-                     66, 205, 76, 221, 76, 195, 213, 84, 236, 234, 224, 78, 227, 34, 145, 221,
-                     139, 126, 232, 69, 173, 170, 208, 192, 219, 245, 67, 3, 15, 149, 120, 171,
-                     70, 53, 106, 213, 175, 23, 21, 153, 139, 254, 27, 249, 75, 234, 124, 71, 116,
-                     56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203, 119, 142, 170, 169, 138,
-                     202, 112, 228, 140, 38];
+        let input = [
+            180,
+            253,
+            73,
+            143,
+            28,
+            201,
+            150,
+            46,
+            8,
+            254,
+            150,
+            184,
+            139,
+            75,
+            18,
+            69,
+            247,
+            32,
+            157,
+            51,
+            27,
+            141,
+            132,
+            207,
+            78,
+            210,
+            167,
+            116,
+            243,
+            160,
+            223,
+            136,
+            141,
+            66,
+            205,
+            76,
+            221,
+            76,
+            195,
+            213,
+            84,
+            236,
+            234,
+            224,
+            78,
+            227,
+            34,
+            145,
+            221,
+            139,
+            126,
+            232,
+            69,
+            173,
+            170,
+            208,
+            192,
+            219,
+            245,
+            67,
+            3,
+            15,
+            149,
+            120,
+            171,
+            70,
+            53,
+            106,
+            213,
+            175,
+            23,
+            21,
+            153,
+            139,
+            254,
+            27,
+            249,
+            75,
+            234,
+            124,
+            71,
+            116,
+            56,
+            71,
+            68,
+            212,
+            204,
+            121,
+            115,
+            64,
+            222,
+            160,
+            203,
+            119,
+            142,
+            170,
+            169,
+            138,
+            202,
+            112,
+            228,
+            140,
+            38,
+        ];
         let mut bit_reader = ::bit::BitReader::new(&input[..]);
         assert_eq!(bit_reader.read_bit().unwrap(), false); // not final block
         assert_eq!(bit_reader.read_bits(2).unwrap(), 0b10); // DynamicHuffmanCodec
@@ -207,14 +318,134 @@ mod test {
 
     #[test]
     fn it_works() {
-        let input = [180, 253, 73, 143, 28, 201, 150, 46, 8, 254, 150, 184, 139, 75, 18, 69, 247,
-                     32, 157, 51, 27, 141, 132, 207, 78, 210, 167, 116, 243, 160, 223, 136, 141,
-                     66, 205, 76, 221, 76, 195, 213, 84, 236, 234, 224, 78, 227, 34, 145, 221,
-                     139, 126, 232, 69, 173, 170, 208, 192, 219, 245, 67, 3, 15, 149, 120, 171,
-                     70, 53, 106, 213, 175, 23, 21, 153, 139, 254, 27, 249, 75, 234, 124, 71, 116,
-                     56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203, 119, 142, 170, 169, 138,
-                     202, 112, 228, 140, 38, 171, 162, 88, 212, 235, 56, 136, 231, 233, 239, 113,
-                     249, 163, 252, 16, 42, 138, 49, 226, 108, 73, 28, 153];
+        let input = [
+            180,
+            253,
+            73,
+            143,
+            28,
+            201,
+            150,
+            46,
+            8,
+            254,
+            150,
+            184,
+            139,
+            75,
+            18,
+            69,
+            247,
+            32,
+            157,
+            51,
+            27,
+            141,
+            132,
+            207,
+            78,
+            210,
+            167,
+            116,
+            243,
+            160,
+            223,
+            136,
+            141,
+            66,
+            205,
+            76,
+            221,
+            76,
+            195,
+            213,
+            84,
+            236,
+            234,
+            224,
+            78,
+            227,
+            34,
+            145,
+            221,
+            139,
+            126,
+            232,
+            69,
+            173,
+            170,
+            208,
+            192,
+            219,
+            245,
+            67,
+            3,
+            15,
+            149,
+            120,
+            171,
+            70,
+            53,
+            106,
+            213,
+            175,
+            23,
+            21,
+            153,
+            139,
+            254,
+            27,
+            249,
+            75,
+            234,
+            124,
+            71,
+            116,
+            56,
+            71,
+            68,
+            212,
+            204,
+            121,
+            115,
+            64,
+            222,
+            160,
+            203,
+            119,
+            142,
+            170,
+            169,
+            138,
+            202,
+            112,
+            228,
+            140,
+            38,
+            171,
+            162,
+            88,
+            212,
+            235,
+            56,
+            136,
+            231,
+            233,
+            239,
+            113,
+            249,
+            163,
+            252,
+            16,
+            42,
+            138,
+            49,
+            226,
+            108,
+            73,
+            28,
+            153,
+        ];
         let mut decoder = Decoder::new(&input[..]);
 
         let result = io::copy(&mut decoder, &mut io::sink());

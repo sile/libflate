@@ -101,15 +101,17 @@ struct Trailer {
 }
 impl Trailer {
     fn read_from<R>(mut reader: R) -> io::Result<Self>
-        where R: io::Read
+    where
+        R: io::Read,
     {
         Ok(Trailer {
-               crc32: reader.read_u32::<LittleEndian>()?,
-               input_size: reader.read_u32::<LittleEndian>()?,
-           })
+            crc32: reader.read_u32::<LittleEndian>()?,
+            input_size: reader.read_u32::<LittleEndian>()?,
+        })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         writer.write_u32::<LittleEndian>(self.crc32)?;
         writer.write_u32::<LittleEndian>(self.input_size)?;
@@ -316,30 +318,31 @@ impl Header {
     }
 
     fn flags(&self) -> u8 {
-        [(F_TEXT, self.is_text),
-         (F_HCRC, self.is_verified),
-         (F_EXTRA, self.extra_field.is_some()),
-         (F_NAME, self.filename.is_some()),
-         (F_COMMENT, self.comment.is_some())]
-                .iter()
-                .filter(|e| e.1)
-                .map(|e| e.0)
-                .sum()
+        [
+            (F_TEXT, self.is_text),
+            (F_HCRC, self.is_verified),
+            (F_EXTRA, self.extra_field.is_some()),
+            (F_NAME, self.filename.is_some()),
+            (F_COMMENT, self.comment.is_some()),
+        ].iter()
+            .filter(|e| e.1)
+            .map(|e| e.0)
+            .sum()
     }
     fn crc16(&self) -> u16 {
         let mut crc = checksum::Crc32::new();
         let mut buf = Vec::new();
         Header {
-                is_verified: false,
-                ..self.clone()
-            }
-            .write_to(&mut buf)
+            is_verified: false,
+            ..self.clone()
+        }.write_to(&mut buf)
             .unwrap();
         crc.update(&buf);
         crc.value() as u16
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         writer.write_all(&GZIP_ID)?;
         writer.write_u8(COMPRESSION_METHOD_DEFLATE)?;
@@ -362,22 +365,27 @@ impl Header {
         Ok(())
     }
     fn read_from<R>(mut reader: R) -> io::Result<Self>
-        where R: io::Read
+    where
+        R: io::Read,
     {
         let mut this = HeaderBuilder::new().finish();
         let mut id = [0; 2];
         reader.read_exact(&mut id)?;
         if id != GZIP_ID {
-            return Err(invalid_data_error!("Unexpected GZIP ID: value={:?}, \
+            return Err(invalid_data_error!(
+                "Unexpected GZIP ID: value={:?}, \
                                                     expected={:?}",
-                                           id,
-                                           GZIP_ID));
+                id,
+                GZIP_ID
+            ));
         }
         let compression_method = reader.read_u8()?;
         if compression_method != COMPRESSION_METHOD_DEFLATE {
-            return Err(invalid_data_error!("Compression methods other than DEFLATE(8) are \
+            return Err(invalid_data_error!(
+                "Compression methods other than DEFLATE(8) are \
                                             unsupported: method={}",
-                                           compression_method));
+                compression_method
+            ));
         }
         let flags = reader.read_u8()?;
         this.modification_time = reader.read_u32::<LittleEndian>()?;
@@ -396,10 +404,12 @@ impl Header {
             let crc = reader.read_u16::<LittleEndian>()?;
             let expected = this.crc16();
             if crc != expected {
-                return Err(invalid_data_error!("CRC16 of GZIP header mismatched: value={}, \
+                return Err(invalid_data_error!(
+                    "CRC16 of GZIP header mismatched: value={}, \
                                                 expected={}",
-                                               crc,
-                                               expected));
+                    crc,
+                    expected
+                ));
             }
             this.is_verified = true;
         }
@@ -408,7 +418,8 @@ impl Header {
 }
 
 fn read_cstring<R>(mut reader: R) -> io::Result<CString>
-    where R: io::Read
+where
+    R: io::Read,
 {
     let mut buf = Vec::new();
     loop {
@@ -431,7 +442,8 @@ pub struct ExtraField {
 }
 impl ExtraField {
     fn read_from<R>(mut reader: R) -> io::Result<Self>
-        where R: io::Read
+    where
+        R: io::Read,
     {
         let mut extra = ExtraField {
             id: [0; 2],
@@ -439,7 +451,10 @@ impl ExtraField {
         };
         let data_size = reader.read_u16::<LittleEndian>()? as usize;
         if data_size < 2 {
-            return Err(invalid_data_error!("extra field is too short: {}", data_size));
+            return Err(invalid_data_error!(
+                "extra field is too short: {}",
+                data_size
+            ));
         }
 
         reader.read_exact(&mut extra.id)?;
@@ -450,7 +465,8 @@ impl ExtraField {
         Ok(extra)
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         writer.write_all(&self.id)?;
         writer.write_u16::<LittleEndian>(self.data.len() as u16)?;
@@ -557,7 +573,8 @@ impl Os {
 /// Options for a GZIP encoder.
 #[derive(Debug)]
 pub struct EncodeOptions<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
@@ -585,7 +602,8 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl<E> EncodeOptions<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     /// Specifies the LZ77 encoder used to compress input data.
     ///
@@ -676,7 +694,8 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     writer: deflate::Encoder<W, E>,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
-    where W: io::Write
+where
+    W: io::Write,
 {
     /// Makes a new encoder instance.
     ///
@@ -696,8 +715,9 @@ impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     }
 }
 impl<W, E> Encoder<W, E>
-    where W: io::Write,
-          E: lz77::Lz77Encode
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
 {
     /// Makes a new encoder instance with specified options.
     ///
@@ -720,11 +740,11 @@ impl<W, E> Encoder<W, E>
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
-               header: options.header.clone(),
-               crc32: checksum::Crc32::new(),
-               input_size: 0,
-               writer: deflate::Encoder::with_options(inner, options.options),
-           })
+            header: options.header.clone(),
+            crc32: checksum::Crc32::new(),
+            input_size: 0,
+            writer: deflate::Encoder::with_options(inner, options.options),
+        })
     }
 
     /// Returns the header of the GZIP stream.
@@ -765,7 +785,8 @@ impl<W, E> Encoder<W, E>
     }
 }
 impl<W> io::Write for Encoder<W>
-    where W: io::Write
+where
+    W: io::Write,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let written_size = self.writer.write(buf)?;
@@ -787,7 +808,8 @@ pub struct Decoder<R> {
     eos: bool,
 }
 impl<R> Decoder<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     /// Makes a new decoder instance.
     ///
@@ -811,11 +833,11 @@ impl<R> Decoder<R>
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = Header::read_from(&mut inner)?;
         Ok(Decoder {
-               header: header,
-               reader: deflate::Decoder::new(inner),
-               crc32: checksum::Crc32::new(),
-               eos: false,
-           })
+            header: header,
+            reader: deflate::Decoder::new(inner),
+            crc32: checksum::Crc32::new(),
+            eos: false,
+        })
     }
 
     /// Returns the header of the GZIP stream.
@@ -854,7 +876,8 @@ impl<R> Decoder<R>
     }
 }
 impl<R> io::Read for Decoder<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.eos {
@@ -866,9 +889,11 @@ impl<R> io::Read for Decoder<R>
                 self.eos = true;
                 let trailer = Trailer::read_from(self.reader.as_inner_mut())?;
                 if trailer.crc32 != self.crc32.value() {
-                    Err(invalid_data_error!("CRC32 mismatched: value={}, expected={}",
-                                            self.crc32.value(),
-                                            trailer.crc32))
+                    Err(invalid_data_error!(
+                        "CRC32 mismatched: value={}, expected={}",
+                        self.crc32.value(),
+                        trailer.crc32
+                    ))
                 } else {
                     Ok(0)
                 }

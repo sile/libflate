@@ -14,25 +14,33 @@ use libflate::zlib;
 
 fn main() {
     let matches = App::new("deflate")
-        .arg(Arg::with_name("INPUT")
-                 .short("i")
-                 .long("input")
-                 .value_name("FILE")
-                 .takes_value(true)
-                 .default_value("-"))
-        .arg(Arg::with_name("OUTPUT")
-                 .short("o")
-                 .long("output")
-                 .value_name("FILE")
-                 .takes_value(true)
-                 .default_value("-"))
+        .arg(
+            Arg::with_name("INPUT")
+                .short("i")
+                .long("input")
+                .value_name("FILE")
+                .takes_value(true)
+                .default_value("-"),
+        )
+        .arg(
+            Arg::with_name("OUTPUT")
+                .short("o")
+                .long("output")
+                .value_name("FILE")
+                .takes_value(true)
+                .default_value("-"),
+        )
         .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
         .subcommand(SubCommand::with_name("copy"))
-        .subcommand(SubCommand::with_name("byte-read").arg(Arg::with_name("UNIT")
-                                                               .short("u")
-                                                               .long("unit")
-                                                               .takes_value(true)
-                                                               .default_value("1")))
+        .subcommand(
+            SubCommand::with_name("byte-read").arg(
+                Arg::with_name("UNIT")
+                    .short("u")
+                    .long("unit")
+                    .takes_value(true)
+                    .default_value("1"),
+            ),
+        )
         .subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .subcommand(SubCommand::with_name("zlib-decode"))
@@ -43,8 +51,10 @@ fn main() {
     let input: Box<io::Read> = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
-        Box::new(fs::File::open(input_filename)
-                     .expect(&format!("Can't open file: {}", input_filename)))
+        Box::new(fs::File::open(input_filename).expect(&format!(
+            "Can't open file: {}",
+            input_filename
+        )))
     };
     let mut input = io::BufReader::new(input);
 
@@ -54,8 +64,10 @@ fn main() {
     } else if output_filename == "/dev/null" {
         Box::new(io::sink())
     } else {
-        Box::new(fs::File::create(output_filename)
-                     .expect(&format!("Can't create file: {}", output_filename)))
+        Box::new(fs::File::create(output_filename).expect(&format!(
+            "Can't create file: {}",
+            output_filename
+        )))
     };
     let mut output = io::BufWriter::new(output);
 

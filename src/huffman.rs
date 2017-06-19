@@ -119,7 +119,8 @@ pub struct Decoder {
 impl Decoder {
     #[inline(always)]
     pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
-        where R: io::Read
+    where
+        R: io::Read,
     {
         let v = self.decode_unchecked(reader);
         reader.check_last_error()?;
@@ -128,7 +129,8 @@ impl Decoder {
 
     #[inline(always)]
     pub fn decode_unchecked<R>(&self, reader: &mut bit::BitReader<R>) -> u16
-        where R: io::Read
+    where
+        R: io::Read,
     {
         let code = reader.peek_bits_unchecked(self.eob_bitwidth);
         let mut value = unsafe { *self.table.get_unchecked(code as usize) };
@@ -153,7 +155,7 @@ pub struct EncoderBuilder {
 }
 impl EncoderBuilder {
     pub fn new(symbol_count: usize) -> Self {
-        EncoderBuilder { table: vec![Code::new(0,0); symbol_count] }
+        EncoderBuilder { table: vec![Code::new(0, 0); symbol_count] }
     }
     pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
         let symbol_count = bitwidthes
@@ -166,9 +168,10 @@ impl EncoderBuilder {
         builder.restore_canonical_huffman_codes(bitwidthes)
     }
     pub fn from_frequencies(symbol_frequencies: &[usize], max_bitwidth: u8) -> Encoder {
-        let max_bitwidth =
-            cmp::min(max_bitwidth,
-                     ordinary_huffman_codes::calc_optimal_max_bitwidth(symbol_frequencies));
+        let max_bitwidth = cmp::min(
+            max_bitwidth,
+            ordinary_huffman_codes::calc_optimal_max_bitwidth(symbol_frequencies),
+        );
         let code_bitwidthes = length_limited_huffman_codes::calc(max_bitwidth, symbol_frequencies);
         Self::from_bitwidthes(&code_bitwidthes)
     }
@@ -191,7 +194,8 @@ pub struct Encoder {
 impl Encoder {
     #[inline(always)]
     pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: u16) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         let code = self.lookup(symbol);
         debug_assert!(code != Code::new(0, 0));
@@ -199,18 +203,18 @@ impl Encoder {
     }
     #[inline(always)]
     pub fn lookup(&self, symbol: u16) -> Code {
-        debug_assert!(symbol < self.table.len() as u16,
-                      "symbol:{}, table:{}",
-                      symbol,
-                      self.table.len());
+        debug_assert!(
+            symbol < self.table.len() as u16,
+            "symbol:{}, table:{}",
+            symbol,
+            self.table.len()
+        );
         unsafe { self.table.get_unchecked(symbol as usize) }.clone()
     }
     pub fn used_max_symbol(&self) -> Option<u16> {
-        self.table
-            .iter()
-            .rev()
-            .position(|x| x.width > 0)
-            .map(|trailing_zeros| (self.table.len() - 1 - trailing_zeros) as u16)
+        self.table.iter().rev().position(|x| x.width > 0).map(
+            |trailing_zeros| (self.table.len() - 1 - trailing_zeros) as u16,
+        )
     }
 }
 
@@ -272,13 +276,14 @@ mod length_limited_huffman_codes {
             .collect::<Vec<_>>();
         source.sort_by_key(|o| o.weight);
 
-        let weighted = (0..max_bitwidth - 1)
-            .fold(source.clone(), |w, _| merge(package(w), source.clone()));
+        let weighted =
+            (0..max_bitwidth - 1).fold(source.clone(), |w, _| merge(package(w), source.clone()));
 
         let mut code_bitwidthes = vec![0; frequencies.len()];
-        for symbol in package(weighted)
-                .into_iter()
-                .flat_map(|n| n.symbols.into_iter()) {
+        for symbol in package(weighted).into_iter().flat_map(
+            |n| n.symbols.into_iter(),
+        )
+        {
             code_bitwidthes[symbol as usize] += 1;
         }
         code_bitwidthes

@@ -54,7 +54,8 @@ pub trait Sink {
     fn consume(&mut self, code: Code);
 }
 impl<'a, T> Sink for &'a mut T
-    where T: Sink
+where
+    T: Sink,
 {
     fn consume(&mut self, code: Code) {
         (*self).consume(code);
@@ -64,10 +65,14 @@ impl<'a, T> Sink for &'a mut T
 /// The `LZ77Encode` trait defines the interface of LZ77 encoding algorithm.
 pub trait Lz77Encode {
     /// Encodes a buffer and writes result LZ77 codes to `sink`.
-    fn encode<S>(&mut self, buf: &[u8], sink: S) where S: Sink;
+    fn encode<S>(&mut self, buf: &[u8], sink: S)
+    where
+        S: Sink;
 
     /// Flushes the encoder, ensuring that all intermediately buffered codes are consumed by `sink`.
-    fn flush<S>(&mut self, sink: S) where S: Sink;
+    fn flush<S>(&mut self, sink: S)
+    where
+        S: Sink;
 
     /// Returns the compression level of the encoder.
     ///
@@ -107,14 +112,19 @@ impl NoCompressionLz77Encoder {
 }
 impl Lz77Encode for NoCompressionLz77Encoder {
     fn encode<S>(&mut self, buf: &[u8], mut sink: S)
-        where S: Sink
+    where
+        S: Sink,
     {
         for c in buf.iter().cloned().map(Code::Literal) {
             sink.consume(c);
         }
     }
     #[allow(unused_variables)]
-    fn flush<S>(&mut self, sink: S) where S: Sink {}
+    fn flush<S>(&mut self, sink: S)
+    where
+        S: Sink,
+    {
+    }
     fn compression_level(&self) -> CompressionLevel {
         CompressionLevel::None
     }

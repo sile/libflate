@@ -10,7 +10,8 @@ pub struct BitWriter<W> {
     end: u8,
 }
 impl<W> BitWriter<W>
-    where W: io::Write
+where
+    W: io::Write,
 {
     pub fn new(inner: W) -> Self {
         BitWriter {
@@ -70,7 +71,8 @@ pub struct BitReader<R> {
     last_error: Option<io::Error>,
 }
 impl<R> BitReader<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     pub fn new(inner: R) -> Self {
         BitReader {
@@ -183,7 +185,9 @@ mod test {
         assert_eq!(reader.peek_bits_unchecked(3), 0b101);
         reader.skip_bits(1);
         assert_eq!(reader.peek_bits_unchecked(3), 0b010);
-        assert_eq!(reader.read_bits(8).map_err(|e| e.kind()),
-                   Err(io::ErrorKind::UnexpectedEof));
+        assert_eq!(
+            reader.read_bits(8).map_err(|e| e.kind()),
+            Err(io::ErrorKind::UnexpectedEof)
+        );
     }
 }

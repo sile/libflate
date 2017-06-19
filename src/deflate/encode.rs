@@ -45,7 +45,8 @@ impl EncodeOptions<lz77::DefaultLz77Encoder> {
     }
 }
 impl<E> EncodeOptions<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     /// Specifies the LZ77 encoder used to compress input data.
     ///
@@ -135,7 +136,8 @@ pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     block: Block<E>,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
-    where W: io::Write
+where
+    W: io::Write,
 {
     /// Makes a new encoder instance.
     ///
@@ -158,8 +160,9 @@ impl<W> Encoder<W, lz77::DefaultLz77Encoder>
     }
 }
 impl<W, E> Encoder<W, E>
-    where W: io::Write,
-          E: lz77::Lz77Encode
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
 {
     /// Makes a new encoder instance with specified options.
     ///
@@ -222,8 +225,9 @@ impl<W, E> Encoder<W, E>
     }
 }
 impl<W, E> io::Write for Encoder<W, E>
-    where W: io::Write,
-          E: lz77::Lz77Encode
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.block.write(&mut self.writer, buf)?;
@@ -241,7 +245,8 @@ struct Block<E> {
     block_buf: BlockBuf<E>,
 }
 impl<E> Block<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     fn new(options: EncodeOptions<E>) -> Self {
         Block {
@@ -251,7 +256,8 @@ impl<E> Block<E>
         }
     }
     fn write<W>(&mut self, writer: &mut bit::BitWriter<W>, buf: &[u8]) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         self.block_buf.append(buf);
         while self.block_buf.len() >= self.block_size {
@@ -262,7 +268,8 @@ impl<E> Block<E>
         Ok(())
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         writer.write_bit(true)?;
         writer.write_bits(2, self.block_type as u16)?;
@@ -279,7 +286,8 @@ enum BlockBuf<E> {
     Dynamic(CompressBuf<symbol::DynamicHuffmanCodec, E>),
 }
 impl<E> BlockBuf<E>
-    where E: lz77::Lz77Encode
+where
+    E: lz77::Lz77Encode,
 {
     fn new(lz77: Option<E>, dynamic: bool) -> Self {
         if let Some(lz77) = lz77 {
@@ -307,7 +315,8 @@ impl<E> BlockBuf<E>
         }
     }
     fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         match *self {
             BlockBuf::Raw(ref mut b) => b.flush(writer),
@@ -332,16 +341,15 @@ impl RawBuf {
         self.buf.len()
     }
     fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         let size = cmp::min(self.buf.len(), MAX_NON_COMPRESSED_BLOCK_SIZE);
         writer.flush()?;
-        writer
-            .as_inner_mut()
-            .write_u16::<LittleEndian>(size as u16)?;
-        writer
-            .as_inner_mut()
-            .write_u16::<LittleEndian>(!size as u16)?;
+        writer.as_inner_mut().write_u16::<LittleEndian>(size as u16)?;
+        writer.as_inner_mut().write_u16::<LittleEndian>(
+            !size as u16,
+        )?;
         writer.as_inner_mut().write_all(&self.buf[..size])?;
         self.buf.drain(0..size);
         Ok(())
@@ -356,8 +364,9 @@ struct CompressBuf<H, E> {
     original_size: usize,
 }
 impl<H, E> CompressBuf<H, E>
-    where H: symbol::HuffmanCodec,
-          E: lz77::Lz77Encode
+where
+    H: symbol::HuffmanCodec,
+    E: lz77::Lz77Encode,
 {
     fn new(huffman: H, lz77: E) -> Self {
         CompressBuf {
@@ -375,7 +384,8 @@ impl<H, E> CompressBuf<H, E>
         self.original_size
     }
     fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
-        where W: io::Write
+    where
+        W: io::Write,
     {
         self.lz77.flush(&mut self.buf);
         self.buf.push(symbol::Symbol::EndOfBlock);
