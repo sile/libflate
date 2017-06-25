@@ -12,6 +12,7 @@ license = "MIT"
 
 [badges]
 travis-ci = {repository = "sile/libflate"}
+codecov = {repository = "sile/libflate"}
 
 [dependencies]
 byteorder = "1"
