@@ -4,6 +4,7 @@ libflate
 [![libflate](http://meritbadge.herokuapp.com/libflate)](https://crates.io/crates/libflate)
 [![Documentation](https://docs.rs/libflate/badge.svg)](https://docs.rs/libflate)
 [![Build Status](https://travis-ci.org/sile/libflate.svg?branch=master)](https://travis-ci.org/sile/libflate)
+[![Code Coverage](https://codecov.io/gh/sile/libflate/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/libflate/branch/master)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
