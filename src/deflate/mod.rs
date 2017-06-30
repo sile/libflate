@@ -26,7 +26,7 @@ pub use self::encode::DEFAULT_BLOCK_SIZE;
 
 mod decode;
 mod encode;
-mod symbol;
+pub(crate) mod symbol;
 
 #[derive(Debug, Clone, Copy)]
 enum BlockType {
