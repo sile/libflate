@@ -1,6 +1,7 @@
 use std::io;
 use std::io::Read;
 use std::cmp;
+use std::mem;
 use std::ptr;
 use byteorder::ReadBytesExt;
 use byteorder::LittleEndian;
@@ -8,55 +9,67 @@ use byteorder::LittleEndian;
 use bit;
 use lz77;
 use util;
-use deflate::symbol;
+use deflate::symbol::{self, HuffmanCodec};
+use non_blocking::bit::TransactionalBitReader;
 
 #[derive(Debug)]
-pub struct Decoder<R> {
-    bit_reader: bit::BitReader<R>,
-    buffer: Vec<u8>,
-    offset: usize,
-    eos: bool,
+enum DecoderState {
+    BlockHead,
+    LoadFixedHuffmanCode,
+    LoadDynamicHuffmanCode,
+    DecodeBlock(symbol::Decoder),
 }
-impl<R> Decoder<R>
-where
-    R: Read,
-{
-    pub fn new(inner: R) -> Self {
-        Decoder {
-            bit_reader: bit::BitReader::new(inner),
-            buffer: Vec::new(),
-            offset: 0,
-            eos: false,
+
+#[derive(Debug)]
+struct BlockHead<R> {
+    bit_reader: Option<TransactionalBitReader<R>>,
+}
+
+#[derive(Debug)]
+enum LoadHuffmanCode<R> {
+    Fixed { bit_reader: TransactionalBitReader<R>, },
+    Dynamic { bit_reader: TransactionalBitReader<R>, },
+}
+
+#[derive(Debug)]
+struct DecodeBlock<R>(R);
+
+#[derive(Debug)]
+struct BlockDecoder<'a, 'b, R: 'a> {
+    symbol_decoder: &'b mut symbol::Decoder,
+    bit_reader: &'a mut TransactionalBitReader<R>,
+    buffer: &'a mut Vec<u8>,
+    offset: &'a mut usize,
+    eob: bool,
+}
+impl<'a, 'b, R: 'a + Read> Read for BlockDecoder<'a, 'b, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if *self.offset < self.buffer.len() {
+            let copy_size = cmp::min(buf.len(), self.buffer.len() - *self.offset);
+            buf[..copy_size].copy_from_slice(&self.buffer[*self.offset..][..copy_size]);
+            *self.offset += copy_size;
+            return Ok(copy_size);
         }
-    }
-    fn read_non_compressed_block(&mut self) -> io::Result<()> {
-        self.bit_reader.reset();
-        let len = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
-        let nlen = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
-        if !len != nlen {
-            Err(invalid_data_error!(
-                "LEN={} is not the one's complement of NLEN={}",
-                len,
-                nlen
-            ))
-        } else {
-            let old_len = self.buffer.len();
-            self.buffer.reserve(len as usize);
-            unsafe { self.buffer.set_len(old_len + len as usize) };
-            self.bit_reader.as_inner_mut().read_exact(
-                &mut self.buffer[old_len..],
-            )?;
-            Ok(())
+        if self.eob {
+            return Ok(0);
         }
-    }
-    fn read_compressed_block<H>(&mut self, huffman: H) -> io::Result<()>
-    where
-        H: symbol::HuffmanCodec,
-    {
-        let symbol_decoder = huffman.load(&mut self.bit_reader)?;
+
         loop {
-            let s = symbol_decoder.decode_unchecked(&mut self.bit_reader);
-            self.bit_reader.check_last_error()?;
+            let symbol_decoder = &mut self.symbol_decoder;
+            let result = self.bit_reader.transaction(|bit_reader| {
+                let s = symbol_decoder.decode_unchecked(bit_reader);
+                bit_reader.check_last_error()?;
+                Ok(s)
+            });
+            let s = match result {
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::WouldBlock && *self.offset < self.buffer.len() {
+                        break;
+                    }
+                    return Err(e);
+                }
+                Ok(s) => s,
+            };
             match s {
                 symbol::Symbol::Literal(b) => {
                     self.buffer.push(b);
@@ -85,11 +98,34 @@ where
                     }
                 }
                 symbol::Symbol::EndOfBlock => {
+                    self.eob = true;
                     break;
                 }
             }
         }
-        Ok(())
+
+        self.read(buf)
+    }
+}
+
+#[derive(Debug)]
+pub struct Decoder<R> {
+    state: DecoderState,
+    bit_reader: TransactionalBitReader<R>,
+    eos: bool,
+    buffer: Vec<u8>,
+    offset: usize,
+}
+impl<R: Read> Decoder<R> {
+    pub fn new(inner: R) -> Self {
+        let reader = TransactionalBitReader::new(inner);
+        Decoder {
+            state: DecoderState::BlockHead,
+            bit_reader: reader,
+            eos: false,
+            buffer: Vec::new(),
+            offset: 0,
+        }
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
@@ -104,41 +140,58 @@ where
         }
     }
 }
-impl<R> Read for Decoder<R>
-where
-    R: Read,
-{
+impl<R: Read> Read for Decoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.offset < self.buffer.len() {
-            let copy_size = cmp::min(buf.len(), self.buffer.len() - self.offset);
-            buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
-            self.offset += copy_size;
-            Ok(copy_size)
-        } else if self.eos {
-            Ok(0)
-        } else {
-            let bfinal = self.bit_reader.read_bit()?;
-            let btype = self.bit_reader.read_bits(2)?;
-            self.eos = bfinal;
-            self.truncate_old_buffer();
-            match btype {
-                0b00 => {
-                    self.read_non_compressed_block()?;
-                    self.read(buf)
+        loop {
+            let next = match self.state {
+                DecoderState::BlockHead => {
+                    let (bfinal, btype) = self.bit_reader.transaction(|r| {
+                        let bfinal = r.read_bit()?;
+                        let btype = r.read_bits(2)?;
+                        Ok((bfinal, btype))
+                    })?;
+                    self.eos = bfinal;
+                    self.truncate_old_buffer();
+                    match btype {
+                        0b00 => unimplemented!(),
+                        0b01 => DecoderState::LoadFixedHuffmanCode,
+                        0b10 => DecoderState::LoadDynamicHuffmanCode,
+                        0b11 => {
+                            return Err(invalid_data_error!(
+                                "btype 0x11 of DEFLATE is reserved(error) value"
+                            ))
+                        }
+                        _ => unreachable!(),
+                    }
                 }
-                0b01 => {
-                    self.read_compressed_block(symbol::FixedHuffmanCodec)?;
-                    self.read(buf)
+                DecoderState::LoadFixedHuffmanCode => {
+                    let symbol_decoder = self.bit_reader.transaction(
+                        |r| symbol::FixedHuffmanCodec.load(r),
+                    )?;
+                    DecoderState::DecodeBlock(symbol_decoder)
                 }
-                0b10 => {
-                    self.read_compressed_block(symbol::DynamicHuffmanCodec)?;
-                    self.read(buf)
+                DecoderState::LoadDynamicHuffmanCode => {
+                    let symbol_decoder = self.bit_reader.transaction(
+                        |r| symbol::DynamicHuffmanCodec.load(r),
+                    )?;
+                    DecoderState::DecodeBlock(symbol_decoder)
                 }
-                0b11 => Err(invalid_data_error!(
-                    "btype 0x11 of DEFLATE is reserved(error) value"
-                )),
-                _ => unreachable!(),
-            }
+                DecoderState::DecodeBlock(ref mut symbol_decoder) => {
+                    let mut decoder = BlockDecoder {
+                        symbol_decoder,
+                        bit_reader: &mut self.bit_reader,
+                        buffer: &mut self.buffer,
+                        offset: &mut self.offset,
+                        eob: false,
+                    };
+                    let read_size = decoder.read(buf)?;
+                    if read_size != 0 || self.eos {
+                        return Ok(read_size);
+                    }
+                    DecoderState::BlockHead
+                }
+            };
+            self.state = next;
         }
     }
 }

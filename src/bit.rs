@@ -63,6 +63,12 @@ impl<W> BitWriter<W> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BitReaderState {
+    last_read: u32,
+    offset: u8,
+}
+
 #[derive(Debug)]
 pub struct BitReader<R> {
     inner: R,
@@ -74,9 +80,28 @@ impl<R> BitReader<R>
 where
     R: io::Read,
 {
+    pub(crate) fn state(&self) -> BitReaderState {
+        BitReaderState {
+            last_read: self.last_read,
+            offset: self.offset,
+        }
+    }
+    pub(crate) fn with_state(inner: R, state: BitReaderState) -> Self {
+        BitReader {
+            inner,
+            last_read: state.last_read,
+            offset: state.offset,
+            last_error: None,
+        }
+    }
+    pub(crate) fn restore(&mut self, state: BitReaderState) {
+        self.last_read = state.last_read;
+        self.offset = state.offset;
+    }
+
     pub fn new(inner: R) -> Self {
         BitReader {
-            inner: inner,
+            inner,
             last_read: 0,
             offset: 32,
             last_error: None,
