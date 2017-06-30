@@ -24,8 +24,10 @@ pub mod lz77;
 pub mod zlib;
 pub mod gzip;
 pub mod deflate;
+pub mod non_blocking;
 
 mod bit;
 mod finish;
 mod huffman;
 mod checksum;
+mod util;
