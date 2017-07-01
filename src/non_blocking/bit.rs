@@ -57,10 +57,10 @@ impl<R> BufferReader<R> {
         }
     }
     pub fn start_transaction(&mut self) {
-        // TODO: assert!(!self.in_transaction);
+        assert!(!self.in_transaction);
         self.in_transaction = true;
-        self.offset = 0;
-        self.buf.clear();
+        // self.offset = 0;
+        // self.buf.clear();
     }
     pub fn commit_transaction(&mut self) {
         self.in_transaction = false;
@@ -68,6 +68,7 @@ impl<R> BufferReader<R> {
         self.buf.clear();
     }
     pub fn abort_transaction(&mut self) {
+        self.in_transaction = false;
         self.offset = 0;
     }
 }

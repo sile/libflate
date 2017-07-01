@@ -98,14 +98,15 @@ impl BlockDecoder {
         bit_reader: &mut TransactionalBitReader<R>,
         symbol_decoder: &mut symbol::Decoder,
     ) -> io::Result<Option<symbol::Symbol>> {
-        bit_reader.transaction(|bit_reader| {
+        let result = bit_reader.transaction(|bit_reader| {
             let s = symbol_decoder.decode_unchecked(bit_reader);
-            match bit_reader.check_last_error() {
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
-                Err(e) => Err(e),
-                Ok(()) => Ok(Some(s)),
-            }
-        })
+            bit_reader.check_last_error().map(|()| s)
+        });
+        match result {
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
+            Err(e) => Err(e),
+            Ok(s) => Ok(Some(s)),
+        }
     }
 }
 impl Read for BlockDecoder {
