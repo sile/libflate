@@ -1,12 +1,11 @@
 use std::io;
 use std::io::Read;
 use std::cmp;
-use std::mem;
+// use std::mem;
 use std::ptr;
-use byteorder::ReadBytesExt;
-use byteorder::LittleEndian;
+// use byteorder::ReadBytesExt;
+// use byteorder::LittleEndian;
 
-use bit;
 use lz77;
 use util;
 use deflate::symbol::{self, HuffmanCodec};
@@ -21,67 +20,40 @@ enum DecoderState {
 }
 
 #[derive(Debug)]
-struct BlockHead<R> {
-    bit_reader: Option<TransactionalBitReader<R>>,
-}
-
-#[derive(Debug)]
-enum LoadHuffmanCode<R> {
-    Fixed { bit_reader: TransactionalBitReader<R>, },
-    Dynamic { bit_reader: TransactionalBitReader<R>, },
-}
-
-#[derive(Debug)]
-struct DecodeBlock<R>(R);
-
-#[derive(Debug)]
-struct BlockDecoder<'a, 'b, R: 'a> {
-    symbol_decoder: &'b mut symbol::Decoder,
-    bit_reader: &'a mut TransactionalBitReader<R>,
-    buffer: &'a mut Vec<u8>,
-    offset: &'a mut usize,
+struct BlockDecoder {
+    buffer: Vec<u8>,
+    offset: usize,
     eob: bool,
 }
-impl<'a, 'b, R: 'a + Read> Read for BlockDecoder<'a, 'b, R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if *self.offset < self.buffer.len() {
-            let copy_size = cmp::min(buf.len(), self.buffer.len() - *self.offset);
-            buf[..copy_size].copy_from_slice(&self.buffer[*self.offset..][..copy_size]);
-            *self.offset += copy_size;
-            return Ok(copy_size);
+impl BlockDecoder {
+    pub fn new() -> Self {
+        BlockDecoder {
+            buffer: Vec::new(),
+            offset: 0,
+            eob: false,
         }
+    }
+    pub fn decode<R: Read>(
+        &mut self,
+        bit_reader: &mut TransactionalBitReader<R>,
+        symbol_decoder: &mut symbol::Decoder,
+    ) -> io::Result<()> {
         if self.eob {
-            return Ok(0);
+            return Ok(());
         }
 
-        loop {
-            let symbol_decoder = &mut self.symbol_decoder;
-            let result = self.bit_reader.transaction(|bit_reader| {
-                let s = symbol_decoder.decode_unchecked(bit_reader);
-                bit_reader.check_last_error()?;
-                Ok(s)
-            });
-            let s = match result {
-                Err(e) => {
-                    if e.kind() == io::ErrorKind::WouldBlock && *self.offset < self.buffer.len() {
-                        break;
-                    }
-                    return Err(e);
-                }
-                Ok(s) => s,
-            };
+        while let Some(s) = self.decode_symbol(bit_reader, symbol_decoder)? {
             match s {
                 symbol::Symbol::Literal(b) => {
                     self.buffer.push(b);
                 }
                 symbol::Symbol::Share { length, distance } => {
                     if self.buffer.len() < distance as usize {
-                        let msg = format!(
+                        return Err(invalid_data_error!(
                             "Too long backword reference: buffer.len={}, distance={}",
                             self.buffer.len(),
                             distance
-                        );
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                        ));
                     }
                     let old_len = self.buffer.len();
                     self.buffer.reserve(length as usize);
@@ -103,29 +75,11 @@ impl<'a, 'b, R: 'a + Read> Read for BlockDecoder<'a, 'b, R> {
                 }
             }
         }
-
-        self.read(buf)
+        Ok(())
     }
-}
-
-#[derive(Debug)]
-pub struct Decoder<R> {
-    state: DecoderState,
-    bit_reader: TransactionalBitReader<R>,
-    eos: bool,
-    buffer: Vec<u8>,
-    offset: usize,
-}
-impl<R: Read> Decoder<R> {
-    pub fn new(inner: R) -> Self {
-        let reader = TransactionalBitReader::new(inner);
-        Decoder {
-            state: DecoderState::BlockHead,
-            bit_reader: reader,
-            eos: false,
-            buffer: Vec::new(),
-            offset: 0,
-        }
+    pub fn enter_new_block(&mut self) {
+        self.eob = false;
+        self.truncate_old_buffer();
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
@@ -137,6 +91,53 @@ impl<R: Read> Decoder<R> {
             }
             self.buffer.truncate(new_len);
             self.offset = new_len;
+        }
+    }
+    fn decode_symbol<R: Read>(
+        &mut self,
+        bit_reader: &mut TransactionalBitReader<R>,
+        symbol_decoder: &mut symbol::Decoder,
+    ) -> io::Result<Option<symbol::Symbol>> {
+        bit_reader.transaction(|bit_reader| {
+            let s = symbol_decoder.decode_unchecked(bit_reader);
+            match bit_reader.check_last_error() {
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
+                Err(e) => Err(e),
+                Ok(()) => Ok(Some(s)),
+            }
+        })
+    }
+}
+impl Read for BlockDecoder {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.offset < self.buffer.len() {
+            let copy_size = cmp::min(buf.len(), self.buffer.len() - self.offset);
+            buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
+            self.offset += copy_size;
+            Ok(copy_size)
+        } else if self.eob {
+            Ok(0)
+        } else {
+            Err(io::Error::new(io::ErrorKind::WouldBlock, "Would block"))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Decoder<R> {
+    state: DecoderState,
+    bit_reader: TransactionalBitReader<R>,
+    eos: bool,
+    block_decoder: BlockDecoder,
+}
+impl<R: Read> Decoder<R> {
+    pub fn new(inner: R) -> Self {
+        let reader = TransactionalBitReader::new(inner);
+        Decoder {
+            state: DecoderState::BlockHead,
+            bit_reader: reader,
+            eos: false,
+            block_decoder: BlockDecoder::new(),
         }
     }
 }
@@ -151,7 +152,7 @@ impl<R: Read> Read for Decoder<R> {
                         Ok((bfinal, btype))
                     })?;
                     self.eos = bfinal;
-                    self.truncate_old_buffer();
+                    self.block_decoder.enter_new_block();
                     match btype {
                         0b00 => unimplemented!(),
                         0b01 => DecoderState::LoadFixedHuffmanCode,
@@ -177,21 +178,105 @@ impl<R: Read> Read for Decoder<R> {
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::DecodeBlock(ref mut symbol_decoder) => {
-                    let mut decoder = BlockDecoder {
+                    self.block_decoder.decode(
+                        &mut self.bit_reader,
                         symbol_decoder,
-                        bit_reader: &mut self.bit_reader,
-                        buffer: &mut self.buffer,
-                        offset: &mut self.offset,
-                        eob: false,
-                    };
-                    let read_size = decoder.read(buf)?;
-                    if read_size != 0 || self.eos {
+                    )?;
+                    let read_size = self.block_decoder.read(buf)?;
+                    if read_size == 0 && !self.eos {
+                        DecoderState::BlockHead
+                    } else {
                         return Ok(read_size);
                     }
-                    DecoderState::BlockHead
                 }
             };
             self.state = next;
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::{self, Read};
+    use deflate::Encoder;
+    use super::*;
+
+    struct BlockReader<R> {
+        inner: R,
+        do_block: bool,
+    }
+    impl<R: Read> BlockReader<R> {
+        pub fn new(inner: R) -> Self {
+            BlockReader {
+                inner,
+                do_block: false,
+            }
+        }
+    }
+    impl<R: Read> Read for BlockReader<R> {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.do_block = !self.do_block;
+            if self.do_block {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, "Would block"))
+            } else {
+                let mut byte = [0; 1];
+                if self.inner.read(&mut byte[..])? == 1 {
+                    buf[0] = byte[0];
+                    Ok(1)
+                } else {
+                    Ok(0)
+                }
+            }
+        }
+    }
+
+    fn nb_read_to_end<R: Read>(mut reader: R) -> io::Result<Vec<u8>> {
+        let mut buf = vec![0; 1024];
+        let mut offset = 0;
+        loop {
+            match reader.read(&mut buf[offset..]) {
+                Err(e) => {
+                    if e.kind() != io::ErrorKind::WouldBlock {
+                        return Err(e);
+                    }
+                }
+                Ok(0) => {
+                    buf.truncate(offset);
+                    break;
+                }
+                Ok(size) => {
+                    offset += size;
+                    if offset == buf.len() {
+                        buf.resize(offset * 2, 0);
+                    }
+                }
+            }
+        }
+        Ok(buf)
+    }
+
+    #[test]
+    fn it_works() {
+        let mut encoder = Encoder::new(Vec::new());
+        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        let encoded_data = encoder.finish().into_result().unwrap();
+
+        let mut decoder = Decoder::new(&encoded_data[..]);
+        let mut decoded_data = Vec::new();
+        decoder.read_to_end(&mut decoded_data).unwrap();
+
+        assert_eq!(decoded_data, b"Hello World!");
+    }
+
+    #[test]
+    fn nb_works() {
+        let mut encoder = Encoder::new(Vec::new());
+        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        let encoded_data = encoder.finish().into_result().unwrap();
+
+        let decoder = Decoder::new(BlockReader::new(&encoded_data[..]));
+        let decoded_data = nb_read_to_end(decoder).unwrap();
+
+        assert_eq!(decoded_data, b"Hello World!");
     }
 }

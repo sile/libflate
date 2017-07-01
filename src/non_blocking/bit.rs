@@ -38,28 +38,6 @@ impl<R: Read> TransactionalBitReader<R> {
     pub fn commit_transaction(&mut self) {
         self.inner.as_inner_mut().commit_transaction();
     }
-    pub fn read_bit(&mut self) -> io::Result<bool> {
-        match self.inner.read_bit() {
-            Err(e) => {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    self.abort_transaction();
-                }
-                Err(e)
-            }
-            Ok(v) => Ok(v),
-        }
-    }
-    pub fn read_bits(&mut self, width: u8) -> io::Result<u16> {
-        match self.inner.read_bits(width) {
-            Err(e) => {
-                if e.kind() == io::ErrorKind::WouldBlock {
-                    self.abort_transaction();
-                }
-                Err(e)
-            }
-            Ok(v) => Ok(v),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -79,7 +57,7 @@ impl<R> BufferReader<R> {
         }
     }
     pub fn start_transaction(&mut self) {
-        assert!(!self.in_transaction);
+        // TODO: assert!(!self.in_transaction);
         self.in_transaction = true;
         self.offset = 0;
         self.buf.clear();

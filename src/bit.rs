@@ -86,14 +86,6 @@ where
             offset: self.offset,
         }
     }
-    pub(crate) fn with_state(inner: R, state: BitReaderState) -> Self {
-        BitReader {
-            inner,
-            last_read: state.last_read,
-            offset: state.offset,
-            last_error: None,
-        }
-    }
     pub(crate) fn restore(&mut self, state: BitReaderState) {
         self.last_read = state.last_read;
         self.offset = state.offset;
