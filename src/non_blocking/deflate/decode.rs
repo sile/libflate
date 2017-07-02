@@ -1,19 +1,166 @@
 use std::io;
 use std::io::Read;
 use std::cmp;
-// use std::mem;
 use std::ptr;
-// use byteorder::ReadBytesExt;
-// use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
+use byteorder::LittleEndian;
 
 use lz77;
 use util;
 use deflate::symbol::{self, HuffmanCodec};
 use non_blocking::transaction::TransactionalBitReader;
 
+/// DEFLATE decoder which supports non-blocking I/O.
+#[derive(Debug)]
+pub struct Decoder<R> {
+    state: DecoderState,
+    eos: bool,
+    bit_reader: TransactionalBitReader<R>,
+    block_decoder: BlockDecoder,
+}
+impl<R: Read> Decoder<R> {
+    /// Makes a new decoder instance.
+    ///
+    /// `inner` is to be decoded DEFLATE stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::{Cursor, Read};
+    /// use libflate::non_blocking::deflate::Decoder;
+    ///
+    /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
+    /// let mut decoder = Decoder::new(&encoded_data[..]);
+    /// let mut buf = Vec::new();
+    /// decoder.read_to_end(&mut buf).unwrap();
+    ///
+    /// assert_eq!(buf, b"Hello World!");
+    /// ```
+    pub fn new(inner: R) -> Self {
+        Decoder {
+            state: DecoderState::ReadBlockHeader,
+            eos: false,
+            bit_reader: TransactionalBitReader::new(inner),
+            block_decoder: BlockDecoder::new(),
+        }
+    }
+
+    /// Returns the immutable reference to the inner stream.
+    pub fn as_inner_ref(&self) -> &R {
+        self.bit_reader.as_inner_ref()
+    }
+
+    /// Returns the mutable reference to the inner stream.
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        self.bit_reader.as_inner_mut()
+    }
+
+    /// Unwraps this `Decoder`, returning the underlying reader.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::non_blocking::deflate::Decoder;
+    ///
+    /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
+    /// let decoder = Decoder::new(Cursor::new(&encoded_data));
+    /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data);
+    /// ```
+    pub fn into_inner(self) -> R {
+        self.bit_reader.into_inner()
+    }
+}
+impl<R: Read> Read for Decoder<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut read_size;
+        loop {
+            let next = match self.state {
+                DecoderState::ReadBlockHeader => {
+                    let (bfinal, btype) = self.bit_reader.transaction(|r| {
+                        let bfinal = r.read_bit()?;
+                        let btype = r.read_bits(2)?;
+                        Ok((bfinal, btype))
+                    })?;
+                    self.eos = bfinal;
+                    self.block_decoder.enter_new_block();
+                    match btype {
+                        0b00 => DecoderState::ReadNonCompressedBlockLen,
+                        0b01 => DecoderState::LoadFixedHuffmanCode,
+                        0b10 => DecoderState::LoadDynamicHuffmanCode,
+                        0b11 => {
+                            return Err(invalid_data_error!(
+                                "btype 0x11 of DEFLATE is reserved(error) value"
+                            ))
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                DecoderState::ReadNonCompressedBlockLen => {
+                    let len = self.bit_reader.transaction(|r| {
+                        r.reset();
+                        let len = r.as_inner_mut().read_u16::<LittleEndian>()?;
+                        let nlen = r.as_inner_mut().read_u16::<LittleEndian>()?;
+                        if !len != nlen {
+                            Err(invalid_data_error!(
+                                "LEN={} is not the one's complement of NLEN={}",
+                                len,
+                                nlen
+                            ))
+                        } else {
+                            Ok(len)
+                        }
+                    })?;
+                    self.block_decoder.buffer.reserve(len as usize);
+                    DecoderState::ReadNonCompressedBlock { len }
+                }
+                DecoderState::ReadNonCompressedBlock { ref mut len } => {
+                    let buf_len = buf.len();
+                    let buf = &mut buf[..cmp::min(buf_len, *len as usize)];
+                    read_size = self.bit_reader.as_inner_mut().read(buf)?;
+
+                    self.block_decoder.buffer.extend(&buf[..read_size]);
+                    *len -= read_size as u16;
+                    if read_size == 0 && !buf.is_empty() && !self.eos {
+                        DecoderState::ReadBlockHeader
+                    } else {
+                        break;
+                    }
+                }
+                DecoderState::LoadFixedHuffmanCode => {
+                    let symbol_decoder = self.bit_reader.transaction(
+                        |r| symbol::FixedHuffmanCodec.load(r),
+                    )?;
+                    DecoderState::DecodeBlock(symbol_decoder)
+                }
+                DecoderState::LoadDynamicHuffmanCode => {
+                    let symbol_decoder = self.bit_reader.transaction(
+                        |r| symbol::DynamicHuffmanCodec.load(r),
+                    )?;
+                    DecoderState::DecodeBlock(symbol_decoder)
+                }
+                DecoderState::DecodeBlock(ref mut symbol_decoder) => {
+                    self.block_decoder.decode(
+                        &mut self.bit_reader,
+                        symbol_decoder,
+                    )?;
+                    read_size = self.block_decoder.read(buf)?;
+                    if read_size == 0 && !buf.is_empty() && !self.eos {
+                        DecoderState::ReadBlockHeader
+                    } else {
+                        break;
+                    }
+                }
+            };
+            self.state = next;
+        }
+        Ok(read_size)
+    }
+}
+
 #[derive(Debug)]
 enum DecoderState {
-    BlockHead,
+    ReadBlockHeader,
+    ReadNonCompressedBlockLen,
+    ReadNonCompressedBlock { len: u16 },
     LoadFixedHuffmanCode,
     LoadDynamicHuffmanCode,
     DecodeBlock(symbol::Decoder),
@@ -33,6 +180,10 @@ impl BlockDecoder {
             eob: false,
         }
     }
+    pub fn enter_new_block(&mut self) {
+        self.eob = false;
+        self.truncate_old_buffer();
+    }
     pub fn decode<R: Read>(
         &mut self,
         bit_reader: &mut TransactionalBitReader<R>,
@@ -41,7 +192,6 @@ impl BlockDecoder {
         if self.eob {
             return Ok(());
         }
-
         while let Some(s) = self.decode_symbol(bit_reader, symbol_decoder)? {
             match s {
                 symbol::Symbol::Literal(b) => {
@@ -76,10 +226,6 @@ impl BlockDecoder {
             }
         }
         Ok(())
-    }
-    pub fn enter_new_block(&mut self) {
-        self.eob = false;
-        self.truncate_old_buffer();
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
@@ -124,137 +270,12 @@ impl Read for BlockDecoder {
     }
 }
 
-#[derive(Debug)]
-pub struct Decoder<R> {
-    state: DecoderState,
-    bit_reader: TransactionalBitReader<R>,
-    eos: bool,
-    block_decoder: BlockDecoder,
-}
-impl<R: Read> Decoder<R> {
-    pub fn new(inner: R) -> Self {
-        let reader = TransactionalBitReader::new(inner);
-        Decoder {
-            state: DecoderState::BlockHead,
-            bit_reader: reader,
-            eos: false,
-            block_decoder: BlockDecoder::new(),
-        }
-    }
-}
-impl<R: Read> Read for Decoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        loop {
-            let next = match self.state {
-                DecoderState::BlockHead => {
-                    let (bfinal, btype) = self.bit_reader.transaction(|r| {
-                        let bfinal = r.read_bit()?;
-                        let btype = r.read_bits(2)?;
-                        Ok((bfinal, btype))
-                    })?;
-                    self.eos = bfinal;
-                    self.block_decoder.enter_new_block();
-                    match btype {
-                        0b00 => unimplemented!(),
-                        0b01 => DecoderState::LoadFixedHuffmanCode,
-                        0b10 => DecoderState::LoadDynamicHuffmanCode,
-                        0b11 => {
-                            return Err(invalid_data_error!(
-                                "btype 0x11 of DEFLATE is reserved(error) value"
-                            ))
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                DecoderState::LoadFixedHuffmanCode => {
-                    let symbol_decoder = self.bit_reader.transaction(
-                        |r| symbol::FixedHuffmanCodec.load(r),
-                    )?;
-                    DecoderState::DecodeBlock(symbol_decoder)
-                }
-                DecoderState::LoadDynamicHuffmanCode => {
-                    let symbol_decoder = self.bit_reader.transaction(
-                        |r| symbol::DynamicHuffmanCodec.load(r),
-                    )?;
-                    DecoderState::DecodeBlock(symbol_decoder)
-                }
-                DecoderState::DecodeBlock(ref mut symbol_decoder) => {
-                    self.block_decoder.decode(
-                        &mut self.bit_reader,
-                        symbol_decoder,
-                    )?;
-                    let read_size = self.block_decoder.read(buf)?;
-                    if read_size == 0 && !self.eos {
-                        DecoderState::BlockHead
-                    } else {
-                        return Ok(read_size);
-                    }
-                }
-            };
-            self.state = next;
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::io::{self, Read};
-    use deflate::Encoder;
+    use deflate::{Encoder, EncodeOptions};
+    use util::{nb_read_to_end, WouldBlockReader};
     use super::*;
-
-    struct BlockReader<R> {
-        inner: R,
-        do_block: bool,
-    }
-    impl<R: Read> BlockReader<R> {
-        pub fn new(inner: R) -> Self {
-            BlockReader {
-                inner,
-                do_block: false,
-            }
-        }
-    }
-    impl<R: Read> Read for BlockReader<R> {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            self.do_block = !self.do_block;
-            if self.do_block {
-                Err(io::Error::new(io::ErrorKind::WouldBlock, "Would block"))
-            } else {
-                let mut byte = [0; 1];
-                if self.inner.read(&mut byte[..])? == 1 {
-                    buf[0] = byte[0];
-                    Ok(1)
-                } else {
-                    Ok(0)
-                }
-            }
-        }
-    }
-
-    fn nb_read_to_end<R: Read>(mut reader: R) -> io::Result<Vec<u8>> {
-        let mut buf = vec![0; 1024];
-        let mut offset = 0;
-        loop {
-            match reader.read(&mut buf[offset..]) {
-                Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
-                        return Err(e);
-                    }
-                }
-                Ok(0) => {
-                    buf.truncate(offset);
-                    break;
-                }
-                Ok(size) => {
-                    offset += size;
-                    if offset == buf.len() {
-                        buf.resize(offset * 2, 0);
-                    }
-                }
-            }
-        }
-        Ok(buf)
-    }
 
     #[test]
     fn it_works() {
@@ -270,12 +291,24 @@ mod test {
     }
 
     #[test]
-    fn nb_works() {
+    fn non_blocking_io_works() {
         let mut encoder = Encoder::new(Vec::new());
         io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 
-        let decoder = Decoder::new(BlockReader::new(&encoded_data[..]));
+        let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));
+        let decoded_data = nb_read_to_end(decoder).unwrap();
+
+        assert_eq!(decoded_data, b"Hello World!");
+    }
+
+    #[test]
+    fn non_compressed_non_blocking_io_works() {
+        let mut encoder = Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression());
+        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        let encoded_data = encoder.finish().into_result().unwrap();
+
+        let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));
         let decoded_data = nb_read_to_end(decoder).unwrap();
 
         assert_eq!(decoded_data, b"Hello World!");
