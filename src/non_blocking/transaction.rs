@@ -5,13 +5,19 @@ use bit;
 
 #[derive(Debug)]
 pub struct TransactionalBitReader<R> {
-    pub inner: bit::BitReader<BufferReader<R>>, // TODO: private
+    inner: bit::BitReader<TransactionalReader<R>>,
     savepoint: bit::BitReaderState,
 }
 impl<R: Read> TransactionalBitReader<R> {
+    pub fn new(inner: R) -> Self {
+        let inner = bit::BitReader::new(TransactionalReader::new(inner));
+        let savepoint = inner.state();
+        TransactionalBitReader { inner, savepoint }
+    }
+    #[inline]
     pub fn transaction<F, T>(&mut self, f: F) -> io::Result<T>
     where
-        F: FnOnce(&mut bit::BitReader<BufferReader<R>>) -> io::Result<T>,
+        F: FnOnce(&mut bit::BitReader<TransactionalReader<R>>) -> io::Result<T>,
     {
         self.start_transaction();
         let result = f(&mut self.inner);
@@ -22,69 +28,79 @@ impl<R: Read> TransactionalBitReader<R> {
         }
         result
     }
-    pub fn new(inner: R) -> Self {
-        let inner = bit::BitReader::new(BufferReader::new(inner));
-        let savepoint = inner.state();
-        TransactionalBitReader { inner, savepoint }
-    }
+    #[inline]
     pub fn start_transaction(&mut self) {
         self.inner.as_inner_mut().start_transaction();
         self.savepoint = self.inner.state();
     }
+    #[inline]
     pub fn abort_transaction(&mut self) {
         self.inner.as_inner_mut().abort_transaction();
-        self.inner.restore(self.savepoint);
+        self.inner.restore_state(self.savepoint);
     }
+    #[inline]
     pub fn commit_transaction(&mut self) {
         self.inner.as_inner_mut().commit_transaction();
     }
 }
+impl<R> TransactionalBitReader<R> {
+    pub fn as_inner_ref(&self) -> &R {
+        &self.inner.as_inner_ref().inner
+    }
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        &mut self.inner.as_inner_mut().inner
+    }
+    pub fn into_inner(self) -> R {
+        self.inner.into_inner().inner
+    }
+}
 
 #[derive(Debug)]
-pub struct BufferReader<R> {
+pub struct TransactionalReader<R> {
     inner: R,
-    buf: Vec<u8>,
     in_transaction: bool,
+    buffer: Vec<u8>,
     offset: usize,
 }
-impl<R> BufferReader<R> {
+impl<R> TransactionalReader<R> {
     pub fn new(inner: R) -> Self {
-        BufferReader {
+        TransactionalReader {
             inner,
-            buf: Vec::new(),
+            buffer: Vec::new(),
             in_transaction: false,
             offset: 0,
         }
     }
+    #[inline]
     pub fn start_transaction(&mut self) {
         assert!(!self.in_transaction);
         self.in_transaction = true;
-        // self.offset = 0;
-        // self.buf.clear();
     }
+    #[inline]
     pub fn commit_transaction(&mut self) {
         self.in_transaction = false;
         self.offset = 0;
-        self.buf.clear();
+        self.buffer.clear();
     }
+    #[inline]
     pub fn abort_transaction(&mut self) {
         self.in_transaction = false;
         self.offset = 0;
     }
 }
-impl<R: Read> Read for BufferReader<R> {
+impl<R: Read> Read for TransactionalReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.offset < self.buf.len() {
-            let unread_buf_size = self.buf.len() - self.offset;
+        if self.offset < self.buffer.len() {
+            let unread_buf_size = self.buffer.len() - self.offset;
             let size = cmp::min(buf.len(), unread_buf_size);
-            (&mut buf[0..size]).copy_from_slice(&self.buf[self.offset..self.offset + size]);
+            (&mut buf[0..size]).copy_from_slice(&self.buffer[self.offset..self.offset + size]);
             self.offset += size;
             return Ok(size);
         }
 
         let size = self.inner.read(buf)?;
         if self.in_transaction {
-            self.buf.extend(&buf[0..size]);
+            self.buffer.extend(&buf[0..size]);
             self.offset += size;
         }
         Ok(size)

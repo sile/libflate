@@ -9,7 +9,7 @@ use std::ptr;
 use lz77;
 use util;
 use deflate::symbol::{self, HuffmanCodec};
-use non_blocking::bit::TransactionalBitReader;
+use non_blocking::transaction::TransactionalBitReader;
 
 #[derive(Debug)]
 enum DecoderState {
