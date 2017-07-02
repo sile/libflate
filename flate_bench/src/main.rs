@@ -28,54 +28,67 @@ fn main() {
     println!("");
     println!("# ENCODE (input_size={})", plain.len());
     if !matches.is_present("DISABLE_LIBFLATE") {
-        bench("- libflate",
-              &plain[..],
-              libflate::deflate::Encoder::new(BenchWriter::new()));
+        bench(
+            "- libflate",
+            &plain[..],
+            libflate::deflate::Encoder::new(BenchWriter::new()),
+        );
     }
     if !matches.is_present("DISABLE_FLATE2") {
-        bench("-   flate2",
-              &plain[..],
-              flate2::write::DeflateEncoder::new(BenchWriter::new(), flate2::Compression::Default));
+        bench(
+            "-   flate2",
+            &plain[..],
+            flate2::write::DeflateEncoder::new(BenchWriter::new(), flate2::Compression::Default),
+        );
     }
     println!("");
 
     let compressed = {
         let mut input_file = fs::File::open(input_file_path).unwrap();
-        let mut writer = flate2::write::DeflateEncoder::new(Vec::new(),
-                                                            flate2::Compression::Default);
+        let mut writer =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::Default);
         io::copy(&mut input_file, &mut writer).unwrap();
         writer.finish().unwrap()
     };
     println!("# DECODE (input_size={})", compressed.len());
     if !matches.is_present("DISABLE_LIBFLATE") {
-        bench("- libflate",
-              libflate::deflate::Decoder::new(&compressed[..]),
-              BenchWriter::new());
+        bench(
+            "- libflate",
+            libflate::deflate::Decoder::new(&compressed[..]),
+            BenchWriter::new(),
+        );
     }
     if !matches.is_present("DISABLE_FLATE2") {
-        bench("-   flate2",
-              flate2::read::DeflateDecoder::new(&compressed[..]),
-              BenchWriter::new());
+        bench(
+            "-   flate2",
+            flate2::read::DeflateDecoder::new(&compressed[..]),
+            BenchWriter::new(),
+        );
     }
     if !matches.is_present("DISABLE_INFLATE") {
-        bench("-  inflate",
-              InflateReader::new(&compressed[..]),
-              BenchWriter::new());
+        bench(
+            "-  inflate",
+            InflateReader::new(&compressed[..]),
+            BenchWriter::new(),
+        );
     }
     println!("");
 }
 
 fn bench<R, W>(tag: &str, mut reader: R, mut writer: W)
-    where R: io::Read,
-          W: io::Write + Into<BenchWriter>
+where
+    R: io::Read,
+    W: io::Write + Into<BenchWriter>,
 {
     io::copy(&mut reader, &mut writer).unwrap();
     let (elapsed, size) = writer.into().finish();
-    println!("{}: elapsed={}.{:06}s, size={}",
-             tag,
-             elapsed.as_secs(),
-             elapsed.subsec_nanos() / 1000,
-             size);
+    println!(
+        "{}: elapsed={}.{:06}s, size={}",
+        tag,
+        elapsed.as_secs(),
+        elapsed.subsec_nanos() / 1000,
+        size
+    );
 }
 
 struct BenchWriter {
@@ -122,7 +135,8 @@ struct InflateReader<R> {
     output_offset: usize,
 }
 impl<R> InflateReader<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     pub fn new(reader: R) -> Self {
         InflateReader {
@@ -136,7 +150,8 @@ impl<R> InflateReader<R>
     }
 }
 impl<R> io::Read for InflateReader<R>
-    where R: io::Read
+where
+    R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if self.input_buf.is_empty() {
@@ -144,8 +159,9 @@ impl<R> io::Read for InflateReader<R>
         }
         if !self.output_buf.is_empty() {
             let len = std::cmp::min(buf.len(), self.output_buf.len() - self.output_offset);
-            buf[0..len]
-                .copy_from_slice(&self.output_buf[self.output_offset..self.output_offset + len]);
+            buf[0..len].copy_from_slice(
+                &self.output_buf[self.output_offset..self.output_offset + len],
+            );
             self.output_offset += len;
             if self.output_offset == self.output_buf.len() {
                 self.output_buf.clear();
