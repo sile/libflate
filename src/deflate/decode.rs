@@ -7,6 +7,7 @@ use byteorder::LittleEndian;
 
 use bit;
 use lz77;
+use util;
 use super::symbol;
 
 /// DEFLATE decoder.
@@ -105,12 +106,11 @@ where
                 }
                 symbol::Symbol::Share { length, distance } => {
                     if self.buffer.len() < distance as usize {
-                        let msg = format!(
+                        return Err(invalid_data_error!(
                             "Too long backword reference: buffer.len={}, distance={}",
                             self.buffer.len(),
                             distance
-                        );
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, msg));
+                        ));
                     }
                     let old_len = self.buffer.len();
                     self.buffer.reserve(length as usize);
@@ -118,7 +118,7 @@ where
                         self.buffer.set_len(old_len + length as usize);
                         let start = old_len - distance as usize;
                         let ptr = self.buffer.as_mut_ptr();
-                        ptr_copy(
+                        util::ptr_copy(
                             ptr.offset(start as isize),
                             ptr.offset(old_len as isize),
                             length as usize,
@@ -181,17 +181,6 @@ where
                 )),
                 _ => unreachable!(),
             }
-        }
-    }
-}
-
-#[inline]
-unsafe fn ptr_copy(src: *const u8, dst: *mut u8, count: usize, is_overlapping: bool) {
-    if !is_overlapping {
-        ptr::copy_nonoverlapping(src, dst, count);
-    } else {
-        for i in 0..count {
-            ptr::copy_nonoverlapping(src.offset(i as isize), dst.offset(i as isize), 1);
         }
     }
 }
