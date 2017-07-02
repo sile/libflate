@@ -33,6 +33,8 @@ impl<R: Read> Read for WouldBlockReader<R> {
         self.do_block = !self.do_block;
         if self.do_block {
             Err(io::Error::new(io::ErrorKind::WouldBlock, "Would block"))
+        } else if buf.is_empty() {
+            Ok(0)
         } else {
             let mut byte = [0; 1];
             if self.inner.read(&mut byte[..])? == 1 {

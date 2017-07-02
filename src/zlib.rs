@@ -199,7 +199,7 @@ impl Header {
             window_size: Lz77WindowSize::from_u16(lz77.window_size()),
         }
     }
-    fn read_from<R>(mut reader: R) -> io::Result<Self>
+    pub(crate) fn read_from<R>(mut reader: R) -> io::Result<Self>
     where
         R: io::Read,
     {

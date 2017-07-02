@@ -116,6 +116,14 @@ impl<R: Read> Read for Decoder<R> {
                     self.block_decoder.buffer.reserve(len as usize);
                     DecoderState::ReadNonCompressedBlock { len }
                 }
+                DecoderState::ReadNonCompressedBlock { len: 0 } => {
+                    if self.eos {
+                        read_size = 0;
+                        break;
+                    } else {
+                        DecoderState::ReadBlockHeader
+                    }
+                }
                 DecoderState::ReadNonCompressedBlock { ref mut len } => {
                     let buf_len = buf.len();
                     let buf = &mut buf[..cmp::min(buf_len, *len as usize)];
@@ -123,11 +131,7 @@ impl<R: Read> Read for Decoder<R> {
 
                     self.block_decoder.buffer.extend(&buf[..read_size]);
                     *len -= read_size as u16;
-                    if read_size == 0 && !buf.is_empty() && !self.eos {
-                        DecoderState::ReadBlockHeader
-                    } else {
-                        break;
-                    }
+                    break;
                 }
                 DecoderState::LoadFixedHuffmanCode => {
                     let symbol_decoder = self.bit_reader.transaction(
