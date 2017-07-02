@@ -95,12 +95,15 @@ impl From<lz77::CompressionLevel> for CompressionLevel {
 }
 
 #[derive(Debug, Clone)]
-struct Trailer {
+pub(crate) struct Trailer {
     crc32: u32,
     input_size: u32,
 }
 impl Trailer {
-    fn read_from<R>(mut reader: R) -> io::Result<Self>
+    pub fn crc32(&self) -> u32 {
+        self.crc32
+    }
+    pub fn read_from<R>(mut reader: R) -> io::Result<Self>
     where
         R: io::Read,
     {
@@ -364,7 +367,7 @@ impl Header {
         }
         Ok(())
     }
-    fn read_from<R>(mut reader: R) -> io::Result<Self>
+    pub(crate) fn read_from<R>(mut reader: R) -> io::Result<Self>
     where
         R: io::Read,
     {

@@ -15,5 +15,6 @@
 //! against those that do not consider nonblocking I / O.
 //! So, it is recommended to use the latter if you are not need to handle non-blocking I/O.
 pub mod deflate;
+pub mod gzip;
 
 mod transaction;

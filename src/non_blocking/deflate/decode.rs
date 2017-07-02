@@ -68,6 +68,10 @@ impl<R: Read> Decoder<R> {
     pub fn into_inner(self) -> R {
         self.bit_reader.into_inner()
     }
+
+    pub(crate) fn bit_reader_mut(&mut self) -> &mut TransactionalBitReader<R> {
+        &mut self.bit_reader
+    }
 }
 impl<R: Read> Read for Decoder<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
