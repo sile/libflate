@@ -53,21 +53,26 @@ fn main() {
     println!("# DECODE (input_size={})", compressed.len());
     if !matches.is_present("DISABLE_LIBFLATE") {
         bench(
-            "- libflate",
+            "-                libflate",
             libflate::deflate::Decoder::new(&compressed[..]),
+            BenchWriter::new(),
+        );
+        bench(
+            "- libflate (non-blocking)",
+            libflate::non_blocking::deflate::Decoder::new(&compressed[..]),
             BenchWriter::new(),
         );
     }
     if !matches.is_present("DISABLE_FLATE2") {
         bench(
-            "-   flate2",
+            "-                  flate2",
             flate2::read::DeflateDecoder::new(&compressed[..]),
             BenchWriter::new(),
         );
     }
     if !matches.is_present("DISABLE_INFLATE") {
         bench(
-            "-  inflate",
+            "-                 inflate",
             InflateReader::new(&compressed[..]),
             BenchWriter::new(),
         );
