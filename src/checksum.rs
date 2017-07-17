@@ -1,24 +1,21 @@
-const ADLER32_BASE: u32 = 65521; // largest prime smaller than 65536
+use std::fmt;
+use adler32::RollingAdler32;
 
-#[derive(Debug, Clone)]
-pub struct Adler32 {
-    value: u32,
-}
+pub struct Adler32(RollingAdler32);
 impl Adler32 {
     pub fn new() -> Self {
-        Adler32 { value: 1 }
+        Adler32(RollingAdler32::new())
     }
     pub fn value(&self) -> u32 {
-        self.value
+        self.0.hash()
     }
     pub fn update(&mut self, buf: &[u8]) {
-        let mut s1 = self.value & 0xFFFF;
-        let mut s2 = (self.value >> 16) & 0xFFFF;
-        for &b in buf {
-            s1 = (s1 + b as u32) % ADLER32_BASE;
-            s2 = (s2 + s1) % ADLER32_BASE;
-        }
-        self.value = (s2 << 16) + s1;
+        self.0.update_buffer(buf);
+    }
+}
+impl fmt::Debug for Adler32 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Adler32(_)")
     }
 }
 
