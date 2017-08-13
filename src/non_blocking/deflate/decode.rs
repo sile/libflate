@@ -311,6 +311,22 @@ mod test {
     }
 
     #[test]
+    fn non_blocking_io_for_large_text_works() {
+        let text: String = (0..10000)
+            .into_iter()
+            .map(|i| format!("test {}", i))
+            .collect();
+
+        let mut encoder = ::deflate::Encoder::new(Vec::new());
+        io::copy(&mut text.as_bytes(), &mut encoder).unwrap();
+        let encoded_data = encoder.finish().into_result().unwrap();
+
+        let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));
+        let decoded_data = nb_read_to_end(decoder).unwrap();
+        assert_eq!(decoded_data, text.as_bytes());
+    }
+
+    #[test]
     fn non_compressed_non_blocking_io_works() {
         let mut encoder = Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression());
         io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
