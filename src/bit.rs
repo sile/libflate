@@ -112,7 +112,7 @@ where
     #[inline(always)]
     pub fn peek_bits_unchecked(&mut self, bitwidth: u8) -> u16 {
         debug_assert!(bitwidth <= 16);
-        while (32 - self.offset) < bitwidth {
+        while 32 < self.offset + bitwidth {
             if self.last_error.is_some() {
                 return 0;
             }
@@ -127,7 +127,7 @@ where
     }
     #[inline(always)]
     pub fn skip_bits(&mut self, bitwidth: u8) {
-        debug_assert!(32 - self.offset >= bitwidth);
+        debug_assert!(self.last_error.is_some() || 32 - self.offset >= bitwidth);
         self.offset += bitwidth;
     }
     #[inline(always)]
