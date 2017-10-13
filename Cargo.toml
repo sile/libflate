@@ -17,6 +17,7 @@ codecov = {repository = "sile/libflate"}
 [dependencies]
 adler32 = "1"
 byteorder = "1"
+crc = "1"
 
 [dev-dependencies]
 clap = "2"

@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 extern crate adler32;
 extern crate byteorder;
+extern crate crc;
 
 pub use finish::Finish;
 
