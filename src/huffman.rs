@@ -37,7 +37,7 @@ pub trait Builder: Sized {
     fn set_mapping(&mut self, symbol: u16, code: Code);
     fn finish(self) -> Self::Instance;
     fn restore_canonical_huffman_codes(mut self, bitwidthes: &[u8]) -> Self::Instance {
-        debug_assert!(bitwidthes.len() > 0);
+        debug_assert!(!bitwidthes.is_empty());
 
         let mut symbols = bitwidthes
             .iter()
@@ -69,7 +69,7 @@ impl DecoderBuilder {
     pub fn new(max_bitwidth: u8, eob_symbol: Option<u16>) -> Self {
         debug_assert!(max_bitwidth <= MAX_BITWIDTH);
         DecoderBuilder {
-            table: vec![MAX_BITWIDTH as u16 + 1; 1 << max_bitwidth],
+            table: vec![u16::from(MAX_BITWIDTH) + 1; 1 << max_bitwidth],
             eob_symbol: eob_symbol,
             eob_bitwidth: max_bitwidth,
             max_bitwidth: max_bitwidth,
@@ -89,13 +89,13 @@ impl Builder for DecoderBuilder {
         }
 
         // `bitwidth` encoded `to` value
-        let value = (symbol << 5) | code.width as u16;
+        let value = (symbol << 5) | u16::from(code.width);
 
         // Sets the mapping to all possible indices
         let code_be = code.inverse_endian();
         for padding in 0..(1 << (self.max_bitwidth - code.width)) {
             let i = ((padding << code.width) | code_be.bits) as usize;
-            debug_assert_eq!(self.table[i], MAX_BITWIDTH as u16 + 1);
+            debug_assert_eq!(self.table[i], u16::from(MAX_BITWIDTH) + 1);
             unsafe {
                 *self.table.get_unchecked_mut(i) = value;
             }
@@ -134,18 +134,17 @@ impl Decoder {
     {
         let code = reader.peek_bits_unchecked(self.eob_bitwidth);
         let mut value = unsafe { *self.table.get_unchecked(code as usize) };
-        let mut bitwidth = (value & 0b11111) as u8;
+        let mut bitwidth = (value & 0b1_1111) as u8;
         if bitwidth > self.eob_bitwidth {
             let code = reader.peek_bits_unchecked(self.max_bitwidth);
             value = unsafe { *self.table.get_unchecked(code as usize) };
-            bitwidth = (value & 0b11111) as u8;
+            bitwidth = (value & 0b1_1111) as u8;
             if bitwidth > self.max_bitwidth {
                 reader.set_last_error(invalid_data_error!("Invalid huffman coded stream"));
             }
         }
         reader.skip_bits(bitwidth as u8);
-        let symbol = value >> 5;
-        symbol
+        value >> 5
     }
 }
 
@@ -198,7 +197,7 @@ impl Encoder {
         W: io::Write,
     {
         let code = self.lookup(symbol);
-        debug_assert!(code != Code::new(0, 0));
+        debug_assert_ne!(code, Code::new(0, 0));
         writer.write_bits(code.width, code.bits)
     }
     #[inline(always)]
@@ -312,8 +311,10 @@ mod length_limited_huffman_codes {
     fn package(mut nodes: Vec<Node>) -> Vec<Node> {
         if nodes.len() >= 2 {
             let new_len = nodes.len() / 2;
+
+            #[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
             for i in 0..new_len {
-                nodes[i] = mem::replace(&mut nodes[i * 2 + 0], Node::empty());
+                nodes[i] = mem::replace(&mut nodes[i * 2], Node::empty());
                 let other = mem::replace(&mut nodes[i * 2 + 1], Node::empty());
                 nodes[i].merge(other);
             }

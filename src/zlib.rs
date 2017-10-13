@@ -133,7 +133,7 @@ impl Lz77WindowSize {
     /// ```
     pub fn from_u16(size: u16) -> Self {
         use self::Lz77WindowSize::*;
-        if 16384 < size {
+        if 16_384 < size {
             KB32
         } else if 8192 < size {
             KB16
@@ -169,8 +169,8 @@ impl Lz77WindowSize {
             KB2 => 2048,
             KB4 => 4096,
             KB8 => 8192,
-            KB16 => 16384,
-            KB32 => 32768,
+            KB16 => 16_384,
+            KB32 => 32_768,
         }
     }
 }
@@ -205,7 +205,7 @@ impl Header {
     {
         let cmf = reader.read_u8()?;
         let flg = reader.read_u8()?;
-        let check = ((cmf as u16) << 8) + flg as u16;
+        let check = (u16::from(cmf) << 8) + u16::from(flg);
         if check % 31 != 0 {
             return Err(invalid_data_error!(
                 "Inconsistent ZLIB check bits: `CMF({}) * 256 + \
@@ -228,7 +228,7 @@ impl Header {
             invalid_data_error!("CINFO above 7 are not allowed: value={}", compression_info)
         })?;
 
-        let dict_flag = (flg & 0b100000) != 0;
+        let dict_flag = (flg & 0b100_000) != 0;
         if dict_flag {
             let dictionary_id = reader.read_u32::<BigEndian>()?;
             return Err(invalid_data_error!(
@@ -249,7 +249,7 @@ impl Header {
     {
         let cmf = (self.window_size.as_u4() << 4) | COMPRESSION_METHOD_DEFLATE;
         let mut flg = self.compression_level.as_u2() << 6;
-        let check = ((cmf as u16) << 8) + flg as u16;
+        let check = (u16::from(cmf) << 8) + u16::from(flg);
         if check % 31 != 0 {
             flg += (31 - check % 31) as u8;
         }

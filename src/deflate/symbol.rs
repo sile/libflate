@@ -98,9 +98,9 @@ const DISTANCE_TABLE: [(u16, u8); 30] = [
     (4097, 11),
     (6145, 11),
     (8193, 12),
-    (12289, 12),
-    (16385, 13),
-    (24577, 13),
+    (12_289, 12),
+    (16_385, 13),
+    (24_577, 13),
 ];
 
 #[derive(Debug)]
@@ -112,7 +112,7 @@ pub enum Symbol {
 impl Symbol {
     pub fn code(&self) -> u16 {
         match *self {
-            Symbol::Literal(b) => b as u16,
+            Symbol::Literal(b) => u16::from(b),
             Symbol::EndOfBlock => 256,
             Symbol::Share { length, .. } => {
                 match length {
@@ -131,13 +131,12 @@ impl Symbol {
     pub fn extra_lengh(&self) -> Option<(u8, u16)> {
         if let Symbol::Share { length, .. } = *self {
             match length {
-                3...10 => None,
+                3...10 | 258 => None,
                 11...18 => Some((1, (length - 11) % 2)),
                 19...34 => Some((2, (length - 19) % 4)),
                 35...66 => Some((3, (length - 35) % 8)),
                 67...130 => Some((4, (length - 67) % 16)),
                 131...257 => Some((5, (length - 131) % 32)),
-                258 => None,
                 _ => unreachable!(),
             }
         } else {
@@ -186,7 +185,7 @@ impl Encoder {
             writer.write_bits(bits, extra)?;
         }
         if let Some((code, bits, extra)) = symbol.distance() {
-            self.distance.encode(writer, code as u16)?;
+            self.distance.encode(writer, u16::from(code))?;
             if bits > 0 {
                 writer.write_bits(bits, extra)?;
             }
@@ -240,8 +239,7 @@ impl Decoder {
         let decoded = self.distance.decode_unchecked(reader) as usize;
         let (base, extra_bits) = unsafe { *DISTANCE_TABLE.get_unchecked(decoded) };
         let extra = reader.read_bits_unchecked(extra_bits);
-        let distance = base + extra;
-        distance
+        base + extra
     }
 }
 
@@ -363,14 +361,14 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             let width = if code_counts[i] == 0 {
                 0
             } else {
-                bitwidth_encoder.lookup(i as u16).width as u16
+                u16::from(bitwidth_encoder.lookup(i as u16).width)
             };
             writer.write_bits(3, width)?;
         }
         for &(code, bits, extra) in &codes {
-            bitwidth_encoder.encode(writer, code as u16)?;
+            bitwidth_encoder.encode(writer, u16::from(code))?;
             if bits > 0 {
-                writer.write_bits(bits, extra as u16)?;
+                writer.write_bits(bits, u16::from(extra))?;
             }
         }
         Ok(())

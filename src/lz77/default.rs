@@ -52,6 +52,11 @@ impl DefaultLz77Encoder {
         }
     }
 }
+impl Default for DefaultLz77Encoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Lz77Encode for DefaultLz77Encoder {
     fn encode<S>(&mut self, buf: &[u8], sink: S)
     where

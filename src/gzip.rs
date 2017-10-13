@@ -50,11 +50,11 @@ const OS_QDOS: u8 = 12;
 const OS_ACORN_RISCOS: u8 = 13;
 const OS_UNKNOWN: u8 = 255;
 
-const F_TEXT: u8 = 0b000001;
-const F_HCRC: u8 = 0b000010;
-const F_EXTRA: u8 = 0b000100;
-const F_NAME: u8 = 0b001000;
-const F_COMMENT: u8 = 0b010000;
+const F_TEXT: u8 = 0b00_0001;
+const F_HCRC: u8 = 0b00_0010;
+const F_EXTRA: u8 = 0b00_0100;
+const F_NAME: u8 = 0b00_1000;
+const F_COMMENT: u8 = 0b01_0000;
 
 /// Compression levels defined by the GZIP format.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -264,6 +264,11 @@ impl HeaderBuilder {
     /// Returns the result header.
     pub fn finish(&self) -> Header {
         self.header.clone()
+    }
+}
+impl Default for HeaderBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
