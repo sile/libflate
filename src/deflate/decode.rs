@@ -92,7 +92,7 @@ where
             Ok(())
         }
     }
-    fn read_compressed_block<H>(&mut self, huffman: H) -> io::Result<()>
+    fn read_compressed_block<H>(&mut self, huffman: &H) -> io::Result<()>
     where
         H: symbol::HuffmanCodec,
     {
@@ -169,11 +169,11 @@ where
                     self.read(buf)
                 }
                 0b01 => {
-                    self.read_compressed_block(symbol::FixedHuffmanCodec)?;
+                    self.read_compressed_block(&symbol::FixedHuffmanCodec)?;
                     self.read(buf)
                 }
                 0b10 => {
-                    self.read_compressed_block(symbol::DynamicHuffmanCodec)?;
+                    self.read_compressed_block(&symbol::DynamicHuffmanCodec)?;
                     self.read(buf)
                 }
                 0b11 => Err(invalid_data_error!(

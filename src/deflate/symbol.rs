@@ -156,7 +156,7 @@ pub struct Encoder {
     distance: huffman::Encoder,
 }
 impl Encoder {
-    pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: Symbol) -> io::Result<()>
+    pub fn encode<W>(&self, writer: &mut bit::BitWriter<W>, symbol: &Symbol) -> io::Result<()>
     where
         W: io::Write,
     {

@@ -268,7 +268,9 @@ mod length_limited_huffman_codes {
         }
     }
 
-    /// Reference: https://www.ics.uci.edu/~dan/pubs/LenLimHuff.pdf
+    /// Reference: [A Fast Algorithm for Optimal Length-Limited Huffman Codes][LenLimHuff.pdf]
+    ///
+    /// [LenLimHuff.pdf]: https://www.ics.uci.edu/~dan/pubs/LenLimHuff.pdf
     pub fn calc(max_bitwidth: u8, frequencies: &[usize]) -> Vec<u8> {
         // NOTE: unoptimized implementation
         let mut source = frequencies

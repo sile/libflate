@@ -394,7 +394,7 @@ where
         let symbol_encoder = self.huffman.build(&self.buf);
         self.huffman.save(writer, &symbol_encoder)?;
         for s in self.buf.drain(..) {
-            symbol_encoder.encode(writer, s)?;
+            symbol_encoder.encode(writer, &s)?;
         }
         self.original_size = 0;
         Ok(())
@@ -413,6 +413,6 @@ impl lz77::Sink for Vec<symbol::Symbol> {
                 distance: backward_distance,
             },
         };
-        self.push(From::from(symbol));
+        self.push(symbol);
     }
 }
