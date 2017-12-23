@@ -382,7 +382,7 @@ impl Header {
         if id != GZIP_ID {
             return Err(invalid_data_error!(
                 "Unexpected GZIP ID: value={:?}, \
-                                                    expected={:?}",
+                 expected={:?}",
                 id,
                 GZIP_ID
             ));
@@ -391,7 +391,7 @@ impl Header {
         if compression_method != COMPRESSION_METHOD_DEFLATE {
             return Err(invalid_data_error!(
                 "Compression methods other than DEFLATE(8) are \
-                                            unsupported: method={}",
+                 unsupported: method={}",
                 compression_method
             ));
         }
@@ -414,7 +414,7 @@ impl Header {
             if crc != expected {
                 return Err(invalid_data_error!(
                     "CRC16 of GZIP header mismatched: value={}, \
-                                                expected={}",
+                     expected={}",
                     crc,
                     expected
                 ));
@@ -576,7 +576,6 @@ impl Os {
         }
     }
 }
-
 
 /// Options for a GZIP encoder.
 #[derive(Debug)]

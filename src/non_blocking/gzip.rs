@@ -81,9 +81,9 @@ impl<R: Read> Decoder<R> {
         if let Some(ref header) = self.header {
             Ok(header)
         } else {
-            let header = self.reader.bit_reader_mut().transaction(|r| {
-                Header::read_from(r.as_inner_mut())
-            })?;
+            let header = self.reader
+                .bit_reader_mut()
+                .transaction(|r| Header::read_from(r.as_inner_mut()))?;
             self.header = Some(header);
             self.header()
         }
@@ -118,9 +118,9 @@ impl<R: Read> Read for Decoder<R> {
             let read_size = self.reader.read(buf)?;
             self.crc32.update(&buf[..read_size]);
             if read_size == 0 {
-                let trailer = self.reader.bit_reader_mut().transaction(|r| {
-                    Trailer::read_from(r.as_inner_mut())
-                })?;
+                let trailer = self.reader
+                    .bit_reader_mut()
+                    .transaction(|r| Trailer::read_from(r.as_inner_mut()))?;
                 self.eos = true;
                 if trailer.crc32() != self.crc32.value() {
                     Err(invalid_data_error!(

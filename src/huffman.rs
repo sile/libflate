@@ -154,7 +154,9 @@ pub struct EncoderBuilder {
 }
 impl EncoderBuilder {
     pub fn new(symbol_count: usize) -> Self {
-        EncoderBuilder { table: vec![Code::new(0, 0); symbol_count] }
+        EncoderBuilder {
+            table: vec![Code::new(0, 0); symbol_count],
+        }
     }
     pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
         let symbol_count = bitwidthes
@@ -211,9 +213,11 @@ impl Encoder {
         unsafe { self.table.get_unchecked(symbol as usize) }.clone()
     }
     pub fn used_max_symbol(&self) -> Option<u16> {
-        self.table.iter().rev().position(|x| x.width > 0).map(
-            |trailing_zeros| (self.table.len() - 1 - trailing_zeros) as u16,
-        )
+        self.table
+            .iter()
+            .rev()
+            .position(|x| x.width > 0)
+            .map(|trailing_zeros| (self.table.len() - 1 - trailing_zeros) as u16)
     }
 }
 
@@ -279,9 +283,9 @@ mod length_limited_huffman_codes {
             (0..max_bitwidth - 1).fold(source.clone(), |w, _| merge(package(w), source.clone()));
 
         let mut code_bitwidthes = vec![0; frequencies.len()];
-        for symbol in package(weighted).into_iter().flat_map(
-            |n| n.symbols.into_iter(),
-        )
+        for symbol in package(weighted)
+            .into_iter()
+            .flat_map(|n| n.symbols.into_iter())
         {
             code_bitwidthes[symbol as usize] += 1;
         }

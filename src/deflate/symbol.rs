@@ -15,25 +15,7 @@ const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
 ];
 
 const BITWIDTH_CODE_ORDER: [usize; 19] = [
-    16,
-    17,
-    18,
-    0,
-    8,
-    7,
-    9,
-    6,
-    10,
-    5,
-    11,
-    4,
-    12,
-    3,
-    13,
-    2,
-    14,
-    1,
-    15,
+    16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 ];
 
 const END_OF_BLOCK: u16 = 256;
@@ -114,18 +96,16 @@ impl Symbol {
         match *self {
             Symbol::Literal(b) => u16::from(b),
             Symbol::EndOfBlock => 256,
-            Symbol::Share { length, .. } => {
-                match length {
-                    3...10 => 257 + length - 3,
-                    11...18 => 265 + (length - 11) / 2,
-                    19...34 => 269 + (length - 19) / 4,
-                    35...66 => 273 + (length - 35) / 8,
-                    67...130 => 277 + (length - 67) / 16,
-                    131...257 => 281 + (length - 131) / 32,
-                    258 => 285,
-                    _ => unreachable!(),
-                }
-            }
+            Symbol::Share { length, .. } => match length {
+                3...10 => 257 + length - 3,
+                11...18 => 265 + (length - 11) / 2,
+                19...34 => 269 + (length - 19) / 4,
+                35...66 => 273 + (length - 35) / 8,
+                67...130 => 277 + (length - 67) / 16,
+                131...257 => 281 + (length - 131) / 32,
+                258 => 285,
+                _ => unreachable!(),
+            },
         }
     }
     pub fn extra_lengh(&self) -> Option<(u8, u16)> {
@@ -206,7 +186,10 @@ impl Decoder {
         R: io::Read,
     {
         let mut symbol = self.decode_literal_or_length(reader);
-        if let Symbol::Share { ref mut distance, .. } = symbol {
+        if let Symbol::Share {
+            ref mut distance, ..
+        } = symbol
+        {
             *distance = self.decode_distance(reader);
         }
         symbol
@@ -260,9 +243,10 @@ impl HuffmanCodec for FixedHuffmanCodec {
     fn build(&self, symbols: &[Symbol]) -> Encoder {
         let mut literal_builder = huffman::EncoderBuilder::new(288);
         for &(bitwidth, ref symbols, code_base) in &FIXED_LITERAL_OR_LENGTH_CODE_TABLE {
-            for (code, symbol) in symbols.clone().enumerate().map(|(i, s)| {
-                (code_base + i as u16, s)
-            })
+            for (code, symbol) in symbols
+                .clone()
+                .enumerate()
+                .map(|(i, s)| (code_base + i as u16, s))
             {
                 literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code));
             }
@@ -292,9 +276,10 @@ impl HuffmanCodec for FixedHuffmanCodec {
     {
         let mut literal_builder = huffman::DecoderBuilder::new(9, Some(END_OF_BLOCK));
         for &(bitwidth, ref symbols, code_base) in &FIXED_LITERAL_OR_LENGTH_CODE_TABLE {
-            for (code, symbol) in symbols.clone().enumerate().map(|(i, s)| {
-                (code_base + i as u16, s)
-            })
+            for (code, symbol) in symbols
+                .clone()
+                .enumerate()
+                .map(|(i, s)| (code_base + i as u16, s))
             {
                 literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code));
             }
@@ -354,9 +339,9 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         writer.write_bits(5, literal_code_count - 257)?;
         writer.write_bits(5, distance_code_count - 1)?;
         writer.write_bits(4, bitwidth_code_count - 4)?;
-        for &i in BITWIDTH_CODE_ORDER.iter().take(
-            bitwidth_code_count as usize,
-        )
+        for &i in BITWIDTH_CODE_ORDER
+            .iter()
+            .take(bitwidth_code_count as usize)
         {
             let width = if code_counts[i] == 0 {
                 0
@@ -382,9 +367,9 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         let bitwidth_code_count = reader.read_bits(4)? + 4;
 
         let mut bitwidth_code_bitwidthes = [0; 19];
-        for &i in BITWIDTH_CODE_ORDER.iter().take(
-            bitwidth_code_count as usize,
-        )
+        for &i in BITWIDTH_CODE_ORDER
+            .iter()
+            .take(bitwidth_code_count as usize)
         {
             bitwidth_code_bitwidthes[i] = reader.read_bits(3)? as u8;
         }
@@ -430,9 +415,7 @@ where
         0...15 => Box::new(iter::once(code as u8)),
         16 => {
             let count = reader.read_bits(2)? + 3;
-            let last = last.ok_or_else(
-                || invalid_data_error!("No preceeding value"),
-            )?;
+            let last = last.ok_or_else(|| invalid_data_error!("No preceeding value"))?;
             Box::new(iter::repeat(last).take(count as usize))
         }
         17 => {
@@ -461,8 +444,7 @@ fn build_bitwidth_codes(
     for &(e, size) in &[
         (&codec.literal, literal_code_count),
         (&codec.distance, distance_code_count),
-    ]
-    {
+    ] {
         for (i, c) in (0..size).map(|x| e.lookup(x as u16).width).enumerate() {
             if i > 0 && run_lens.last().map_or(false, |s| s.value == c) {
                 run_lens.last_mut().unwrap().count += 1;

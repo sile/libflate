@@ -134,22 +134,18 @@ impl<R: Read> Read for Decoder<R> {
                     break;
                 }
                 DecoderState::LoadFixedHuffmanCode => {
-                    let symbol_decoder = self.bit_reader.transaction(
-                        |r| symbol::FixedHuffmanCodec.load(r),
-                    )?;
+                    let symbol_decoder = self.bit_reader
+                        .transaction(|r| symbol::FixedHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::LoadDynamicHuffmanCode => {
-                    let symbol_decoder = self.bit_reader.transaction(
-                        |r| symbol::DynamicHuffmanCodec.load(r),
-                    )?;
+                    let symbol_decoder = self.bit_reader
+                        .transaction(|r| symbol::DynamicHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::DecodeBlock(ref mut symbol_decoder) => {
-                    self.block_decoder.decode(
-                        &mut self.bit_reader,
-                        symbol_decoder,
-                    )?;
+                    self.block_decoder
+                        .decode(&mut self.bit_reader, symbol_decoder)?;
                     read_size = self.block_decoder.read(buf)?;
                     if read_size == 0 && !buf.is_empty() && !self.eos {
                         DecoderState::ReadBlockHeader
@@ -281,7 +277,7 @@ impl Read for BlockDecoder {
 #[cfg(test)]
 mod test {
     use std::io::{self, Read};
-    use deflate::{Encoder, EncodeOptions};
+    use deflate::{EncodeOptions, Encoder};
     use util::{nb_read_to_end, WouldBlockReader};
     use super::*;
 
