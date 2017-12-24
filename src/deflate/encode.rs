@@ -131,9 +131,12 @@ where
 
 /// DEFLATE encoder.
 #[derive(Debug)]
-pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
-    writer: bit::BitWriter<W>,
-    block: Block<E>,
+pub struct Encoder<W, E = lz77::DefaultLz77Encoder>
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
+{
+    state: Option<State<W, E>>,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
 where
@@ -183,12 +186,17 @@ where
     /// ```
     pub fn with_options(inner: W, options: EncodeOptions<E>) -> Self {
         Encoder {
-            writer: bit::BitWriter::new(inner),
-            block: Block::new(options),
+            state: Some(State {
+                writer: bit::BitWriter::new(inner),
+                block: Block::new(options),
+            }),
         }
     }
 
     /// Flushes internal buffer and returns the inner stream.
+    ///
+    /// `Encoder` will call this method automatically when drops.
+    /// It may be convenient to rely on the implicit invocation if you are not concerned with the result.
     ///
     /// # Examples
     /// ```
@@ -203,25 +211,29 @@ where
     ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0]);
     /// ```
     pub fn finish(mut self) -> Finish<W, io::Error> {
-        match self.block.finish(&mut self.writer) {
-            Ok(_) => Finish::new(self.writer.into_inner(), None),
-            Err(e) => Finish::new(self.writer.into_inner(), Some(e)),
+        let mut state = self.state.take().expect("Never fails");
+        match state.block.finish(&mut state.writer) {
+            Ok(_) => Finish::new(state.writer.into_inner(), None),
+            Err(e) => Finish::new(state.writer.into_inner(), Some(e)),
         }
     }
 
     /// Returns the immutable reference to the inner stream.
     pub fn as_inner_ref(&self) -> &W {
-        self.writer.as_inner_ref()
+        let state = self.state.as_ref().expect("Never fails");
+        state.writer.as_inner_ref()
     }
 
     /// Returns the mutable reference to the inner stream.
     pub fn as_inner_mut(&mut self) -> &mut W {
-        self.writer.as_inner_mut()
+        let state = self.state.as_mut().expect("Never fails");
+        state.writer.as_inner_mut()
     }
 
     /// Unwraps the `Encoder`, returning the inner stream.
-    pub fn into_inner(self) -> W {
-        self.writer.into_inner()
+    pub fn into_inner(mut self) -> W {
+        let state = self.state.take().expect("Never fails");
+        state.writer.into_inner()
     }
 }
 impl<W, E> io::Write for Encoder<W, E>
@@ -230,12 +242,31 @@ where
     E: lz77::Lz77Encode,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.block.write(&mut self.writer, buf)?;
+        let state = self.state.as_mut().expect("Never fails");
+        state.block.write(&mut state.writer, buf)?;
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.writer.as_inner_mut().flush()
+        let state = self.state.as_mut().expect("Never fails");
+        state.writer.as_inner_mut().flush()
     }
+}
+impl<W, E> Drop for Encoder<W, E>
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
+{
+    fn drop(&mut self) {
+        if let Some(state) = self.state.take() {
+            let _ = Encoder { state: Some(state) }.finish();
+        }
+    }
+}
+
+#[derive(Debug)]
+struct State<W, E> {
+    writer: bit::BitWriter<W>,
+    block: Block<E>,
 }
 
 #[derive(Debug)]
