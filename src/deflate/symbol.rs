@@ -388,7 +388,10 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             .collect::<Vec<_>>();
         while distance_code_bitwidthes.len() < distance_code_count as usize {
             let c = bitwidth_decoder.decode(reader)?;
-            let last = distance_code_bitwidthes.last().cloned();
+            let last = distance_code_bitwidthes
+                .last()
+                .cloned()
+                .or_else(|| literal_code_bitwidthes.last().cloned());
             distance_code_bitwidthes.extend(load_bitwidthes(reader, c, last)?);
         }
         debug_assert_eq!(distance_code_bitwidthes.len(), distance_code_count as usize);
