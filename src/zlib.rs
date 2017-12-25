@@ -561,9 +561,10 @@ where
         }
     }
 }
-impl<W> io::Write for Encoder<W>
+impl<W, E> io::Write for Encoder<W, E>
 where
     W: io::Write,
+    E: lz77::Lz77Encode,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let written_size = self.writer.write(buf)?;
