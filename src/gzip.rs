@@ -19,9 +19,9 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use std::ffi::CString;
 use std::io;
 use std::time;
+use std::ffi::CString;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use byteorder::LittleEndian;
@@ -694,13 +694,11 @@ where
 }
 
 /// GZIP encoder.
-#[derive(Debug)]
-pub struct Encoder<W, E = lz77::DefaultLz77Encoder>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    state: Option<EncoderState<W, E>>,
+pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
+    header: Header,
+    crc32: checksum::Crc32,
+    input_size: u32,
+    writer: deflate::Encoder<W, E>,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
 where
@@ -749,12 +747,10 @@ where
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
-            state: Some(EncoderState {
-                header: options.header.clone(),
-                crc32: checksum::Crc32::new(),
-                input_size: 0,
-                writer: deflate::Encoder::with_options(inner, options.options),
-            }),
+            header: options.header.clone(),
+            crc32: checksum::Crc32::new(),
+            input_size: 0,
+            writer: deflate::Encoder::with_options(inner, options.options),
         })
     }
 
@@ -768,14 +764,10 @@ where
     /// assert_eq!(encoder.header().os(), Os::Unix);
     /// ```
     pub fn header(&self) -> &Header {
-        let state = self.state.as_ref().expect("Never fails");
-        &state.header
+        &self.header
     }
 
     /// Writes the GZIP trailer and returns the inner stream.
-    ///
-    /// `Encoder` will call this method automatically when drops.
-    /// It may be convenient to rely on the implicit invocation if you are not concerned with the result.
     ///
     /// # Examples
     /// ```
@@ -787,58 +779,31 @@ where
     ///
     /// assert!(encoder.finish().as_result().is_ok())
     /// ```
-    pub fn finish(mut self) -> Finish<W, io::Error> {
-        let state = self.state.take().expect("Never fails");
+    pub fn finish(self) -> Finish<W, io::Error> {
         let trailer = Trailer {
-            crc32: state.crc32.value(),
-            input_size: state.input_size,
+            crc32: self.crc32.value(),
+            input_size: self.input_size,
         };
-        let mut inner = finish_try!(state.writer.finish());
+        let mut inner = finish_try!(self.writer.finish());
         match trailer.write_to(&mut inner).and_then(|_| inner.flush()) {
             Ok(_) => Finish::new(inner, None),
             Err(e) => Finish::new(inner, Some(e)),
         }
     }
 }
-impl<W, E> io::Write for Encoder<W, E>
+impl<W> io::Write for Encoder<W>
 where
     W: io::Write,
-    E: lz77::Lz77Encode,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let state = self.state.as_mut().expect("Never fails");
-        let written_size = state.writer.write(buf)?;
-        state.crc32.update(&buf[..written_size]);
-        state.input_size = state.input_size.wrapping_add(written_size as u32);
+        let written_size = self.writer.write(buf)?;
+        self.crc32.update(&buf[..written_size]);
+        self.input_size = self.input_size.wrapping_add(written_size as u32);
         Ok(written_size)
     }
     fn flush(&mut self) -> io::Result<()> {
-        let state = self.state.as_mut().expect("Never fails");
-        state.writer.flush()
+        self.writer.flush()
     }
-}
-impl<W, E> Drop for Encoder<W, E>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    fn drop(&mut self) {
-        if let Some(state) = self.state.take() {
-            let _ = Encoder { state: Some(state) }.finish();
-        }
-    }
-}
-
-#[derive(Debug)]
-struct EncoderState<W, E>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    header: Header,
-    crc32: checksum::Crc32,
-    input_size: u32,
-    writer: deflate::Encoder<W, E>,
 }
 
 /// GZIP decoder.
@@ -965,16 +930,5 @@ mod test {
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
-    }
-
-    #[test]
-    fn encoder_drop_works() {
-        let plain = b"Hello World! Hello GZIP!!";
-        let mut buf = Vec::new();
-        {
-            let mut encoder = Encoder::new(&mut buf).unwrap();
-            io::copy(&mut &plain[..], &mut encoder).unwrap();
-        }
-        assert_eq!(decode_all(&buf).unwrap(), plain);
     }
 }

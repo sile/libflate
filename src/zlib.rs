@@ -463,12 +463,10 @@ where
 
 /// ZLIB encoder.
 #[derive(Debug)]
-pub struct Encoder<W, E = lz77::DefaultLz77Encoder>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    state: Option<EncoderState<W, E>>,
+pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
+    header: Header,
+    writer: deflate::Encoder<W, E>,
+    adler32: checksum::Adler32,
 }
 impl<W> Encoder<W, lz77::DefaultLz77Encoder>
 where
@@ -519,11 +517,9 @@ where
     pub fn with_options(mut inner: W, options: EncodeOptions<E>) -> io::Result<Self> {
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
-            state: Some(EncoderState {
-                header: options.header,
-                writer: deflate::Encoder::with_options(inner, options.options),
-                adler32: checksum::Adler32::new(),
-            }),
+            header: options.header,
+            writer: deflate::Encoder::with_options(inner, options.options),
+            adler32: checksum::Adler32::new(),
         })
     }
 
@@ -537,14 +533,10 @@ where
     /// assert_eq!(encoder.header().window_size(), Lz77WindowSize::KB32);
     /// ```
     pub fn header(&self) -> &Header {
-        let state = self.state.as_ref().expect("Never fails");
-        &state.header
+        &self.header
     }
 
     /// Writes the ZLIB trailer and returns the inner stream.
-    ///
-    /// `Encoder` will call this method automatically when drops.
-    /// It may be convenient to rely on the implicit invocation if you are not concerned with the result.
     ///
     /// # Examples
     /// ```
@@ -558,11 +550,10 @@ where
     ///            [120, 156, 5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
     ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0, 28, 73, 4, 62]);
     /// ```
-    pub fn finish(mut self) -> Finish<W, io::Error> {
-        let state = self.state.take().expect("Never fails");
-        let mut inner = finish_try!(state.writer.finish());
+    pub fn finish(self) -> Finish<W, io::Error> {
+        let mut inner = finish_try!(self.writer.finish());
         match inner
-            .write_u32::<BigEndian>(state.adler32.value())
+            .write_u32::<BigEndian>(self.adler32.value())
             .and_then(|_| inner.flush())
         {
             Ok(_) => Finish::new(inner, None),
@@ -575,37 +566,13 @@ where
     W: io::Write,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let state = self.state.as_mut().expect("Never fails");
-        let written_size = state.writer.write(buf)?;
-        state.adler32.update(&buf[..written_size]);
+        let written_size = self.writer.write(buf)?;
+        self.adler32.update(&buf[..written_size]);
         Ok(written_size)
     }
     fn flush(&mut self) -> io::Result<()> {
-        let state = self.state.as_mut().expect("Never fails");
-        state.writer.flush()
+        self.writer.flush()
     }
-}
-impl<W, E> Drop for Encoder<W, E>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    fn drop(&mut self) {
-        if let Some(state) = self.state.take() {
-            let _ = Encoder { state: Some(state) }.finish();
-        }
-    }
-}
-
-#[derive(Debug)]
-struct EncoderState<W, E>
-where
-    W: io::Write,
-    E: lz77::Lz77Encode,
-{
-    header: Header,
-    writer: deflate::Encoder<W, E>,
-    adler32: checksum::Adler32,
 }
 
 #[cfg(test)]
@@ -689,17 +656,6 @@ mod test {
         let expected = RAW_ENCODE_WORKS_EXPECTED;
         assert_eq!(encoded, expected);
         assert_eq!(decode_all(&encoded).unwrap(), plain);
-    }
-
-    #[test]
-    fn encoder_drop_works() {
-        let plain = b"Hello World! Hello ZLIB!!";
-        let mut buf = Vec::new();
-        {
-            let mut encoder = Encoder::new(&mut buf).unwrap();
-            io::copy(&mut &plain[..], &mut encoder).unwrap();
-        }
-        assert_eq!(decode_all(&buf).unwrap(), plain);
     }
 
     #[test]
