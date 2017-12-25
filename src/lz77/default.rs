@@ -71,12 +71,13 @@ impl Lz77Encode for DefaultLz77Encoder {
     where
         S: Sink,
     {
-        let mut prefix_table = HashMap::new();
+        let mut prefix_table = PrefixTable::new(self.buf.len());
         let mut i = 0;
-        while i < cmp::max(3, self.buf.len()) - 3 {
+        let end = cmp::max(3, self.buf.len()) - 3;
+        while i < end {
             let key = prefix(&self.buf[i..]);
-            let matched = prefix_table.insert(key, i);
-            if let Some(j) = matched {
+            let matched = prefix_table.insert(key, i as u32);
+            if let Some(j) = matched.map(|j| j as usize) {
                 let distance = i - j;
                 if distance <= self.window_size as usize {
                     let length = 3 + longest_common_prefix(&self.buf, i + 3, j + 3);
@@ -84,6 +85,9 @@ impl Lz77Encode for DefaultLz77Encoder {
                         length: length,
                         backward_distance: distance as u16,
                     });
+                    for k in (i..).take(length as usize).skip(1) {
+                        prefix_table.insert(prefix(&self.buf[k..]), k as u32);
+                    }
                     i += length as usize;
                     continue;
                 }
@@ -101,6 +105,7 @@ impl Lz77Encode for DefaultLz77Encoder {
     }
 }
 
+#[inline]
 fn prefix(buf: &[u8]) -> [u8; 3] {
     unsafe {
         [
@@ -111,6 +116,7 @@ fn prefix(buf: &[u8]) -> [u8; 3] {
     }
 }
 
+#[inline]
 fn longest_common_prefix(buf: &[u8], i: usize, j: usize) -> u16 {
     buf[i..]
         .iter()
@@ -118,4 +124,58 @@ fn longest_common_prefix(buf: &[u8], i: usize, j: usize) -> u16 {
         .zip(&buf[j..])
         .take_while(|&(x, y)| x == y)
         .count() as u16
+}
+
+#[derive(Debug)]
+enum PrefixTable {
+    Small(HashMap<[u8; 3], u32>),
+    Large(LargePrefixTable),
+}
+impl PrefixTable {
+    fn new(bytes: usize) -> Self {
+        if bytes < super::MAX_WINDOW_SIZE as usize {
+            PrefixTable::Small(HashMap::new())
+        } else {
+            PrefixTable::Large(LargePrefixTable::new())
+        }
+    }
+
+    #[inline]
+    fn insert(&mut self, prefix: [u8; 3], position: u32) -> Option<u32> {
+        match *self {
+            PrefixTable::Small(ref mut x) => x.insert(prefix, position),
+            PrefixTable::Large(ref mut x) => x.insert(prefix, position),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct LargePrefixTable {
+    table: Vec<Vec<(u8, u32)>>,
+}
+impl LargePrefixTable {
+    fn new() -> Self {
+        LargePrefixTable {
+            table: (0..0xFFFF + 1).map(|_| Vec::new()).collect(),
+        }
+    }
+
+    #[inline]
+    fn insert(&mut self, prefix: [u8; 3], position: u32) -> Option<u32> {
+        let p0 = prefix[0] as usize;
+        let p1 = prefix[1] as usize;
+        let p2 = prefix[2];
+
+        let i = (p0 << 8) + p1;
+        let positions = unsafe { self.table.get_unchecked_mut(i) };
+        for &mut (key, ref mut value) in positions.iter_mut() {
+            if key == p2 {
+                let old = *value;
+                *value = position;
+                return Some(old);
+            }
+        }
+        positions.push((p2, position));
+        None
+    }
 }
