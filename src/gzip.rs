@@ -29,7 +29,7 @@ use byteorder::LittleEndian;
 use lz77;
 use deflate;
 use checksum;
-use finish::Finish;
+use finish::{Complete, Finish};
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -779,6 +779,22 @@ where
     ///
     /// assert!(encoder.finish().as_result().is_ok())
     /// ```
+    ///
+    /// # Note
+    ///
+    /// If you are not concerned the result of this encoding,
+    /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
+    ///
+    /// ```
+    /// use std::io;
+    /// use libflate::finish::AutoFinishUnchecked;
+    /// use libflate::gzip::Encoder;
+    ///
+    /// let plain = b"Hello World!";
+    /// let mut buf = Vec::new();
+    /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
+    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let trailer = Trailer {
             crc32: self.crc32.value(),
@@ -804,6 +820,15 @@ where
     }
     fn flush(&mut self) -> io::Result<()> {
         self.writer.flush()
+    }
+}
+impl<W, E> Complete for Encoder<W, E>
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
+{
+    fn complete(self) -> io::Result<()> {
+        self.finish().into_result().map(|_| ())
     }
 }
 
@@ -915,6 +940,7 @@ where
 #[cfg(test)]
 mod test {
     use std::io;
+    use finish::AutoFinish;
     use super::*;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
@@ -931,5 +957,16 @@ mod test {
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
+    }
+
+    #[test]
+    fn encoder_auto_finish_works() {
+        let plain = b"Hello World! Hello GZIP!!";
+        let mut buf = Vec::new();
+        {
+            let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
+            io::copy(&mut &plain[..], &mut encoder).unwrap();
+        }
+        assert_eq!(decode_all(&buf).unwrap(), plain);
     }
 }

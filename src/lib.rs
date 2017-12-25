@@ -28,9 +28,9 @@ pub mod zlib;
 pub mod gzip;
 pub mod deflate;
 pub mod non_blocking;
+pub mod finish;
 
 mod bit;
-mod finish;
 mod huffman;
 mod checksum;
 mod util;

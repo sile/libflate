@@ -5,7 +5,7 @@ use byteorder::WriteBytesExt;
 
 use bit;
 use lz77;
-use finish::Finish;
+use finish::{Complete, Finish};
 use super::symbol;
 use super::BlockType;
 
@@ -235,6 +235,15 @@ where
     }
     fn flush(&mut self) -> io::Result<()> {
         self.writer.as_inner_mut().flush()
+    }
+}
+impl<W, E> Complete for Encoder<W, E>
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
+{
+    fn complete(self) -> io::Result<()> {
+        self.finish().into_result().map(|_| ())
     }
 }
 

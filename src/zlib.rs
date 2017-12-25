@@ -27,7 +27,7 @@ use byteorder::WriteBytesExt;
 use lz77;
 use deflate;
 use checksum;
-use finish::Finish;
+use finish::{Complete, Finish};
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
@@ -550,6 +550,22 @@ where
     ///            [120, 156, 5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
     ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0, 28, 73, 4, 62]);
     /// ```
+    ///
+    /// # Note
+    ///
+    /// If you are not concerned the result of this encoding,
+    /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
+    ///
+    /// ```
+    /// use std::io;
+    /// use libflate::finish::AutoFinishUnchecked;
+    /// use libflate::zlib::Encoder;
+    ///
+    /// let plain = b"Hello World!";
+    /// let mut buf = Vec::new();
+    /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
+    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
         match inner
@@ -575,10 +591,20 @@ where
         self.writer.flush()
     }
 }
+impl<W, E> Complete for Encoder<W, E>
+where
+    W: io::Write,
+    E: lz77::Lz77Encode,
+{
+    fn complete(self) -> io::Result<()> {
+        self.finish().into_result().map(|_| ())
+    }
+}
 
 #[cfg(test)]
 mod test {
     use std::io;
+    use finish::AutoFinish;
     use super::*;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
@@ -657,6 +683,17 @@ mod test {
         let expected = RAW_ENCODE_WORKS_EXPECTED;
         assert_eq!(encoded, expected);
         assert_eq!(decode_all(&encoded).unwrap(), plain);
+    }
+
+    #[test]
+    fn encoder_auto_finish_works() {
+        let plain = b"Hello World! Hello ZLIB!!";
+        let mut buf = Vec::new();
+        {
+            let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
+            io::copy(&mut &plain[..], &mut encoder).unwrap();
+        }
+        assert_eq!(decode_all(&buf).unwrap(), plain);
     }
 
     #[test]
