@@ -42,6 +42,7 @@ fn main() {
             ),
         )
         .subcommand(SubCommand::with_name("gzip-decode"))
+        .subcommand(SubCommand::with_name("gzip-decode-multi"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .subcommand(SubCommand::with_name("zlib-decode"))
         .subcommand(SubCommand::with_name("zlib-encode"))
@@ -93,6 +94,9 @@ fn main() {
         if verbose {
             let _ = writeln!(&mut io::stderr(), "HEADER: {:?}", decoder.header());
         }
+        io::copy(&mut decoder, &mut output).expect("Decoding GZIP stream failed");
+    } else if let Some(_matches) = matches.subcommand_matches("gzip-decode-multi") {
+        let mut decoder = gzip::MultiDecoder::new(input).expect("Read GZIP header failed");
         io::copy(&mut decoder, &mut output).expect("Decoding GZIP stream failed");
     } else if let Some(_matches) = matches.subcommand_matches("gzip-encode") {
         let mut encoder = gzip::Encoder::new(output).unwrap();

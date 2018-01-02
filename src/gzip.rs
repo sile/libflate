@@ -20,6 +20,7 @@
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
 use std::io;
+use std::mem;
 use std::time;
 use std::ffi::CString;
 use byteorder::ReadBytesExt;
@@ -865,12 +866,7 @@ where
     /// ```
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = Header::read_from(&mut inner)?;
-        Ok(Decoder {
-            header: header,
-            reader: deflate::Decoder::new(inner),
-            crc32: checksum::Crc32::new(),
-            eos: false,
-        })
+        Ok(Self::with_header(inner, header))
     }
 
     /// Returns the header of the GZIP stream.
@@ -907,6 +903,15 @@ where
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
     }
+
+    fn with_header(inner: R, header: Header) -> Self {
+        Decoder {
+            header,
+            reader: deflate::Decoder::new(inner),
+            crc32: checksum::Crc32::new(),
+            eos: false,
+        }
+    }
 }
 impl<R> io::Read for Decoder<R>
 where
@@ -937,17 +942,150 @@ where
     }
 }
 
+/// A decoder that decodes all members in a GZIP stream.
+#[derive(Debug)]
+pub struct MultiDecoder<R> {
+    header: Header,
+    decoder: Result<Decoder<R>, R>,
+}
+impl<R> MultiDecoder<R>
+where
+    R: io::Read,
+{
+    /// Makes a new decoder instance.
+    ///
+    /// `inner` is to be decoded GZIP stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Read;
+    /// use libflate::gzip::MultiDecoder;
+    ///
+    /// let mut encoded_data = Vec::new();
+    ///
+    /// // Add a member (a GZIP binary that represents "Hello ")
+    /// encoded_data.extend(&[31, 139, 8, 0, 51, 206, 75, 90, 0, 3, 5, 128, 49, 9, 0, 0, 0, 194, 170, 24,
+    ///                       199, 34, 126, 3, 251, 127, 163, 131, 71, 192, 252, 45, 234, 6, 0, 0, 0][..]);
+    ///
+    /// // Add another member (a GZIP binary that represents "World!")
+    /// encoded_data.extend(&[31, 139, 8, 0, 227, 207, 75, 90, 0, 3, 5, 128, 49, 9, 0, 0, 0, 194, 178, 152,
+    ///                       202, 2, 158, 130, 96, 255, 99, 120, 111, 4, 222, 157, 40, 118, 6, 0, 0, 0][..]);
+    ///
+    /// let mut decoder = MultiDecoder::new(&encoded_data[..]).unwrap();
+    /// let mut buf = Vec::new();
+    /// decoder.read_to_end(&mut buf).unwrap();
+    ///
+    /// assert_eq!(buf, b"Hello World!");
+    /// ```
+    pub fn new(inner: R) -> io::Result<Self> {
+        let decoder = Decoder::new(inner)?;
+        Ok(MultiDecoder {
+            header: decoder.header().clone(),
+            decoder: Ok(decoder),
+        })
+    }
+
+    /// Returns the header of the current member in the GZIP stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use libflate::gzip::{MultiDecoder, Os};
+    ///
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
+    ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
+    ///                     163, 28, 41, 28, 12, 0, 0, 0];
+    ///
+    /// let decoder = MultiDecoder::new(&encoded_data[..]).unwrap();
+    /// assert_eq!(decoder.header().os(), Os::Unix);
+    /// ```
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    /// Unwraps this `MultiDecoder`, returning the underlying reader.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::io::Cursor;
+    /// use libflate::gzip::MultiDecoder;
+    ///
+    /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
+    ///                     72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33,
+    ///                     163, 28, 41, 28, 12, 0, 0, 0];
+    ///
+    /// let decoder = MultiDecoder::new(Cursor::new(&encoded_data[..])).unwrap();
+    /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data[..]);
+    /// ```
+    pub fn into_inner(self) -> R {
+        match self.decoder {
+            Err(reader) => reader,
+            Ok(decoder) => decoder.into_inner(),
+        }
+    }
+}
+impl<R> io::Read for MultiDecoder<R>
+where
+    R: io::Read,
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let read_size = match self.decoder {
+            Err(_) => return Ok(0),
+            Ok(ref mut decoder) => decoder.read(buf)?,
+        };
+        if read_size == 0 {
+            let mut reader = mem::replace(&mut self.decoder, Err(unsafe { mem::uninitialized() }))
+                .ok()
+                .take()
+                .expect("Never fails")
+                .into_inner();
+            match Header::read_from(&mut reader) {
+                Err(e) => {
+                    mem::forget(mem::replace(&mut self.decoder, Err(reader)));
+                    if e.kind() == io::ErrorKind::UnexpectedEof {
+                        Ok(0)
+                    } else {
+                        Err(e)
+                    }
+                }
+                Ok(header) => {
+                    self.header = header.clone();
+                    mem::forget(mem::replace(
+                        &mut self.decoder,
+                        Ok(Decoder::with_header(reader, header)),
+                    ));
+                    self.read(buf)
+                }
+            }
+        } else {
+            Ok(read_size)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::io;
     use finish::AutoFinish;
     use super::*;
 
-    fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
+    fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
         io::copy(&mut decoder, &mut buf)?;
         Ok(buf)
+    }
+
+    fn decode_multi(buf: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = MultiDecoder::new(buf).unwrap();
+        let mut buf = Vec::with_capacity(buf.len());
+        io::copy(&mut decoder, &mut buf)?;
+        Ok(buf)
+    }
+
+    fn encode(text: &[u8]) -> io::Result<Vec<u8>> {
+        let mut encoder = Encoder::new(Vec::new()).unwrap();
+        io::copy(&mut &text[..], &mut encoder).unwrap();
+        encoder.finish().into_result()
     }
 
     #[test]
@@ -956,7 +1094,7 @@ mod test {
         let mut encoder = Encoder::new(Vec::new()).unwrap();
         io::copy(&mut &plain[..], &mut encoder).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
-        assert_eq!(decode_all(&encoded).unwrap(), plain);
+        assert_eq!(decode(&encoded).unwrap(), plain);
     }
 
     #[test]
@@ -967,6 +1105,18 @@ mod test {
             let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
             io::copy(&mut &plain[..], &mut encoder).unwrap();
         }
-        assert_eq!(decode_all(&buf).unwrap(), plain);
+        assert_eq!(decode(&buf).unwrap(), plain);
+    }
+
+    #[test]
+    fn multi_decode_works() {
+        use std::iter;
+        let text = b"Hello World!";
+        let encoded: Vec<u8> = iter::repeat(encode(text).unwrap())
+            .take(2)
+            .flat_map(|b| b)
+            .collect();
+        assert_eq!(decode(&encoded).unwrap(), b"Hello World!");
+        assert_eq!(decode_multi(&encoded).unwrap(), b"Hello World!Hello World!");
     }
 }
