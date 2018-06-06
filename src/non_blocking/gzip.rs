@@ -89,6 +89,16 @@ impl<R: Read> Decoder<R> {
         }
     }
 
+    /// Returns the immutable reference to the inner stream.
+    pub fn as_inner_ref(&self) -> &R {
+        self.reader.as_inner_ref()
+    }
+
+    /// Returns the mutable reference to the inner stream.
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        self.reader.as_inner_mut()
+    }
+
     /// Unwraps this `Decoder`, returning the underlying reader.
     ///
     /// # Examples
