@@ -316,6 +316,16 @@ where
         &self.header
     }
 
+    /// Returns the immutable reference to the inner stream.
+    pub fn as_inner_ref(&self) -> &R {
+        self.reader.as_inner_ref()
+    }
+
+    /// Returns the mutable reference to the inner stream.
+    pub fn as_inner_mut(&mut self) -> &mut R {
+        self.reader.as_inner_mut()
+    }
+
     /// Unwraps this `Decoder`, returning the underlying reader.
     ///
     /// # Examples
@@ -575,6 +585,21 @@ where
             Ok(_) => Finish::new(inner, None),
             Err(e) => Finish::new(inner, Some(e)),
         }
+    }
+
+    /// Returns the immutable reference to the inner stream.
+    pub fn as_inner_ref(&self) -> &W {
+        self.writer.as_inner_ref()
+    }
+
+    /// Returns the mutable reference to the inner stream.
+    pub fn as_inner_mut(&mut self) -> &mut W {
+        self.writer.as_inner_mut()
+    }
+
+    /// Unwraps the `Encoder`, returning the inner stream.
+    pub fn into_inner(self) -> W {
+        self.writer.into_inner()
     }
 }
 impl<W, E> io::Write for Encoder<W, E>
