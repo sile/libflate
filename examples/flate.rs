@@ -1,16 +1,16 @@
 extern crate clap;
 extern crate libflate;
 
-use std::io;
-use std::io::Read;
-use std::io::Write;
-use std::fs;
-use std::process;
 use clap::App;
 use clap::Arg;
 use clap::SubCommand;
 use libflate::gzip;
 use libflate::zlib;
+use std::fs;
+use std::io;
+use std::io::Read;
+use std::io::Write;
+use std::process;
 
 fn main() {
     let matches = App::new("deflate")

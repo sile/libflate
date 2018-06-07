@@ -18,19 +18,19 @@ macro_rules! finish_try {
     ($e:expr) => {
         match $e.unwrap() {
             (inner, None) => inner,
-            (inner, error) => return ::finish::Finish::new(inner, error)
+            (inner, error) => return ::finish::Finish::new(inner, error),
         }
-    }
+    };
 }
 
-pub mod lz77;
-pub mod zlib;
-pub mod gzip;
 pub mod deflate;
-pub mod non_blocking;
 pub mod finish;
+pub mod gzip;
+pub mod lz77;
+pub mod non_blocking;
+pub mod zlib;
 
 mod bit;
-mod huffman;
 mod checksum;
+mod huffman;
 mod util;

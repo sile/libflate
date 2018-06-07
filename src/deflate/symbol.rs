@@ -1,5 +1,5 @@
-use std::io;
 use std::cmp;
+use std::io;
 use std::iter;
 use std::ops::Range;
 
@@ -15,7 +15,7 @@ const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
 ];
 
 const BITWIDTH_CODE_ORDER: [usize; 19] = [
-    16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
+    16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
 ];
 
 const END_OF_BLOCK: u16 = 256;

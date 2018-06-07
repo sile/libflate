@@ -1,14 +1,14 @@
+use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
+use std::cmp;
 use std::io;
 use std::io::Read;
-use std::cmp;
 use std::ptr;
-use byteorder::ReadBytesExt;
-use byteorder::LittleEndian;
 
-use lz77;
-use util;
 use deflate::symbol::{self, HuffmanCodec};
+use lz77;
 use non_blocking::transaction::TransactionalBitReader;
+use util;
 
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -276,10 +276,10 @@ impl Read for BlockDecoder {
 
 #[cfg(test)]
 mod test {
-    use std::io::{self, Read};
-    use deflate::{EncodeOptions, Encoder};
-    use util::{nb_read_to_end, WouldBlockReader};
     use super::*;
+    use deflate::{EncodeOptions, Encoder};
+    use std::io::{self, Read};
+    use util::{nb_read_to_end, WouldBlockReader};
 
     #[test]
     fn it_works() {

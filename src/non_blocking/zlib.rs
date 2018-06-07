@@ -20,12 +20,12 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use std::io::{self, Read};
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
+use std::io::{self, Read};
 
-use non_blocking::deflate;
 use checksum;
+use non_blocking::deflate;
 use zlib::Header;
 
 /// ZLIB decoder which supports non-blocking I/O.
@@ -150,10 +150,10 @@ impl<R: Read> Read for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use zlib::{EncodeOptions, Encoder};
-    use util::{nb_read_to_end, WouldBlockReader};
     use super::*;
+    use std::io;
+    use util::{nb_read_to_end, WouldBlockReader};
+    use zlib::{EncodeOptions, Encoder};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));
@@ -165,16 +165,14 @@ mod test {
         encoder.finish().into_result()
     }
     macro_rules! assert_encode_decode {
-        ($input:expr) => {
-            {
-                let encoded = default_encode(&$input[..]).unwrap();
-                assert_eq!(decode_all(&encoded).unwrap(), &$input[..]);
-            }
-        }
+        ($input:expr) => {{
+            let encoded = default_encode(&$input[..]).unwrap();
+            assert_eq!(decode_all(&encoded).unwrap(), &$input[..]);
+        }};
     }
 
     const DECODE_WORKS_TESTDATA: [u8; 20] = [
-        120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28, 73, 4, 62
+        120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28, 73, 4, 62,
     ];
     #[test]
     fn decode_works() {

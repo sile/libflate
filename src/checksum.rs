@@ -1,6 +1,6 @@
-use std::fmt;
 use adler32::RollingAdler32;
-use crc::{Hasher32, crc32};
+use crc::{crc32, Hasher32};
+use std::fmt;
 
 pub struct Adler32(RollingAdler32);
 impl Adler32 {

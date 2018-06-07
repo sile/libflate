@@ -1,14 +1,14 @@
+use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
+use std::cmp;
 use std::io;
 use std::io::Read;
-use std::cmp;
 use std::ptr;
-use byteorder::ReadBytesExt;
-use byteorder::LittleEndian;
 
+use super::symbol;
 use bit;
 use lz77;
 use util;
-use super::symbol;
 
 /// DEFLATE decoder.
 #[derive(Debug)]
@@ -187,9 +187,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
     use super::*;
+    use deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
+    use std::io;
 
     #[test]
     fn test_issues_3() {

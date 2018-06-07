@@ -19,15 +19,15 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use std::io;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
+use std::io;
 
-use lz77;
-use deflate;
 use checksum;
+use deflate;
 use finish::{Complete, Finish};
+use lz77;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
@@ -628,9 +628,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use finish::AutoFinish;
     use super::*;
+    use finish::AutoFinish;
+    use std::io;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -644,16 +644,14 @@ mod test {
         encoder.finish().into_result()
     }
     macro_rules! assert_encode_decode {
-        ($input:expr) => {
-            {
-                let encoded = default_encode(&$input[..]).unwrap();
-                assert_eq!(decode_all(&encoded).unwrap(), &$input[..]);
-            }
-        }
+        ($input:expr) => {{
+            let encoded = default_encode(&$input[..]).unwrap();
+            assert_eq!(decode_all(&encoded).unwrap(), &$input[..]);
+        }};
     }
 
     const DECODE_WORKS_TESTDATA: [u8; 20] = [
-        120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28, 73, 4, 62
+        120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0, 28, 73, 4, 62,
     ];
     #[test]
     fn decode_works() {

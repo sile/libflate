@@ -1,7 +1,7 @@
-use std::io;
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
+use std::io;
 
 #[derive(Debug)]
 pub struct BitWriter<W> {
@@ -175,8 +175,8 @@ pub(crate) struct BitReaderState {
 
 #[cfg(test)]
 mod test {
-    use std::io;
     use super::*;
+    use std::io;
 
     #[test]
     fn writer_works() {

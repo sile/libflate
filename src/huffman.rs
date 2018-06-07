@@ -1,7 +1,7 @@
+use std::cmp;
 /// Length-limited Huffman Codes
 ///
 use std::io;
-use std::cmp;
 
 use bit;
 

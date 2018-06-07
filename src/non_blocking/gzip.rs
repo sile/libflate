@@ -150,10 +150,10 @@ impl<R: Read> Read for Decoder<R> {
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use gzip::Encoder;
-    use util::{nb_read_to_end, WouldBlockReader};
     use super::*;
+    use gzip::Encoder;
+    use std::io;
+    use util::{nb_read_to_end, WouldBlockReader};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

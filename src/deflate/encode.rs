@@ -1,13 +1,13 @@
-use std::io;
-use std::cmp;
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
+use std::cmp;
+use std::io;
 
-use bit;
-use lz77;
-use finish::{Complete, Finish};
 use super::symbol;
 use super::BlockType;
+use bit;
+use finish::{Complete, Finish};
+use lz77;
 
 /// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;

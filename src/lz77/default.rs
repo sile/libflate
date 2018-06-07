@@ -2,8 +2,8 @@ use std::cmp;
 use std::collections::HashMap;
 
 use super::Code;
-use super::Sink;
 use super::Lz77Encode;
+use super::Sink;
 
 /// A `Lz77Encode` implementation used by default.
 #[derive(Debug)]

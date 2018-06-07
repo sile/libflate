@@ -19,18 +19,18 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
+use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
+use byteorder::WriteBytesExt;
+use std::ffi::CString;
 use std::io;
 use std::mem;
 use std::time;
-use std::ffi::CString;
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
-use byteorder::LittleEndian;
 
-use lz77;
-use deflate;
 use checksum;
+use deflate;
 use finish::{Complete, Finish};
+use lz77;
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -1105,9 +1105,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::io;
-    use finish::AutoFinish;
     use super::*;
+    use finish::AutoFinish;
+    use std::io;
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
