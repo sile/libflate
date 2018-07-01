@@ -400,7 +400,7 @@ where
     {
         self.lz77.flush(&mut self.buf);
         self.buf.push(symbol::Symbol::EndOfBlock);
-        let symbol_encoder = self.huffman.build(&self.buf);
+        let symbol_encoder = self.huffman.build(&self.buf)?;
         self.huffman.save(writer, &symbol_encoder)?;
         for s in self.buf.drain(..) {
             symbol_encoder.encode(writer, &s)?;

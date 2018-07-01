@@ -34,9 +34,9 @@ impl Code {
 
 pub trait Builder: Sized {
     type Instance;
-    fn set_mapping(&mut self, symbol: u16, code: Code);
+    fn set_mapping(&mut self, symbol: u16, code: Code) -> io::Result<()>;
     fn finish(self) -> Self::Instance;
-    fn restore_canonical_huffman_codes(mut self, bitwidthes: &[u8]) -> Self::Instance {
+    fn restore_canonical_huffman_codes(mut self, bitwidthes: &[u8]) -> io::Result<Self::Instance> {
         debug_assert!(!bitwidthes.is_empty());
 
         let mut symbols = bitwidthes
@@ -51,11 +51,11 @@ pub trait Builder: Sized {
         let mut prev_width = 0;
         for (symbol, bitwidth) in symbols {
             code <<= bitwidth - prev_width;
-            self.set_mapping(symbol, Code::new(bitwidth, code));
+            self.set_mapping(symbol, Code::new(bitwidth, code))?;
             code += 1;
             prev_width = bitwidth;
         }
-        self.finish()
+        Ok(self.finish())
     }
 }
 
@@ -75,14 +75,14 @@ impl DecoderBuilder {
             max_bitwidth: max_bitwidth,
         }
     }
-    pub fn from_bitwidthes(bitwidthes: &[u8], eob_symbol: Option<u16>) -> Decoder {
+    pub fn from_bitwidthes(bitwidthes: &[u8], eob_symbol: Option<u16>) -> io::Result<Decoder> {
         let builder = Self::new(bitwidthes.iter().cloned().max().unwrap_or(0), eob_symbol);
         builder.restore_canonical_huffman_codes(bitwidthes)
     }
 }
 impl Builder for DecoderBuilder {
     type Instance = Decoder;
-    fn set_mapping(&mut self, symbol: u16, code: Code) {
+    fn set_mapping(&mut self, symbol: u16, code: Code) -> io::Result<()> {
         debug_assert!(code.width <= self.max_bitwidth);
         if Some(symbol) == self.eob_symbol {
             self.eob_bitwidth = code.width;
@@ -95,11 +95,18 @@ impl Builder for DecoderBuilder {
         let code_be = code.inverse_endian();
         for padding in 0..(1 << (self.max_bitwidth - code.width)) {
             let i = ((padding << code.width) | code_be.bits) as usize;
-            debug_assert_eq!(self.table[i], u16::from(MAX_BITWIDTH) + 1);
+            if self.table[i] != u16::from(MAX_BITWIDTH) + 1 {
+                let message = format!(
+                    "Bit region conflict: i={}, old_value={}, new_value={}, symbol={}, code={:?}",
+                    i, self.table[i], value, symbol, code
+                );
+                return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+            }
             unsafe {
                 *self.table.get_unchecked_mut(i) = value;
             }
         }
+        Ok(())
     }
     fn finish(self) -> Self::Instance {
         Decoder {
@@ -158,7 +165,7 @@ impl EncoderBuilder {
             table: vec![Code::new(0, 0); symbol_count],
         }
     }
-    pub fn from_bitwidthes(bitwidthes: &[u8]) -> Encoder {
+    pub fn from_bitwidthes(bitwidthes: &[u8]) -> io::Result<Encoder> {
         let symbol_count = bitwidthes
             .iter()
             .enumerate()
@@ -168,7 +175,7 @@ impl EncoderBuilder {
         let builder = Self::new(symbol_count);
         builder.restore_canonical_huffman_codes(bitwidthes)
     }
-    pub fn from_frequencies(symbol_frequencies: &[usize], max_bitwidth: u8) -> Encoder {
+    pub fn from_frequencies(symbol_frequencies: &[usize], max_bitwidth: u8) -> io::Result<Encoder> {
         let max_bitwidth = cmp::min(
             max_bitwidth,
             ordinary_huffman_codes::calc_optimal_max_bitwidth(symbol_frequencies),
@@ -179,9 +186,10 @@ impl EncoderBuilder {
 }
 impl Builder for EncoderBuilder {
     type Instance = Encoder;
-    fn set_mapping(&mut self, symbol: u16, code: Code) {
+    fn set_mapping(&mut self, symbol: u16, code: Code) -> io::Result<()> {
         debug_assert_eq!(self.table[symbol as usize], Code::new(0, 0));
         self.table[symbol as usize] = code.inverse_endian();
+        Ok(())
     }
     fn finish(self) -> Self::Instance {
         Encoder { table: self.table }

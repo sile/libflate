@@ -232,7 +232,7 @@ impl Decoder {
 }
 
 pub trait HuffmanCodec {
-    fn build(&self, symbols: &[Symbol]) -> Encoder;
+    fn build(&self, symbols: &[Symbol]) -> io::Result<Encoder>;
     fn save<W>(&self, writer: &mut bit::BitWriter<W>, codec: &Encoder) -> io::Result<()>
     where
         W: io::Write;
@@ -245,7 +245,7 @@ pub trait HuffmanCodec {
 pub struct FixedHuffmanCodec;
 impl HuffmanCodec for FixedHuffmanCodec {
     #[allow(unused_variables)]
-    fn build(&self, symbols: &[Symbol]) -> Encoder {
+    fn build(&self, symbols: &[Symbol]) -> io::Result<Encoder> {
         let mut literal_builder = huffman::EncoderBuilder::new(288);
         for &(bitwidth, ref symbols, code_base) in &FIXED_LITERAL_OR_LENGTH_CODE_TABLE {
             for (code, symbol) in symbols
@@ -253,19 +253,19 @@ impl HuffmanCodec for FixedHuffmanCodec {
                 .enumerate()
                 .map(|(i, s)| (code_base + i as u16, s))
             {
-                literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code));
+                literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code))?;
             }
         }
 
         let mut distance_builder = huffman::EncoderBuilder::new(30);
         for i in 0..30 {
-            distance_builder.set_mapping(i, huffman::Code::new(5, i));
+            distance_builder.set_mapping(i, huffman::Code::new(5, i))?;
         }
 
-        Encoder {
+        Ok(Encoder {
             literal: literal_builder.finish(),
             distance: distance_builder.finish(),
-        }
+        })
     }
     #[allow(unused_variables)]
     fn save<W>(&self, writer: &mut bit::BitWriter<W>, codec: &Encoder) -> io::Result<()>
@@ -286,13 +286,13 @@ impl HuffmanCodec for FixedHuffmanCodec {
                 .enumerate()
                 .map(|(i, s)| (code_base + i as u16, s))
             {
-                literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code));
+                literal_builder.set_mapping(symbol, huffman::Code::new(bitwidth, code))?;
             }
         }
 
         let mut distance_builder = huffman::DecoderBuilder::new(5, None);
         for i in 0..30 {
-            distance_builder.set_mapping(i, huffman::Code::new(5, i));
+            distance_builder.set_mapping(i, huffman::Code::new(5, i))?;
         }
 
         Ok(Decoder {
@@ -305,7 +305,7 @@ impl HuffmanCodec for FixedHuffmanCodec {
 #[derive(Debug)]
 pub struct DynamicHuffmanCodec;
 impl HuffmanCodec for DynamicHuffmanCodec {
-    fn build(&self, symbols: &[Symbol]) -> Encoder {
+    fn build(&self, symbols: &[Symbol]) -> io::Result<Encoder> {
         let mut literal_counts = [0; 286];
         let mut distance_counts = [0; 30];
         for s in symbols {
@@ -314,10 +314,10 @@ impl HuffmanCodec for DynamicHuffmanCodec {
                 distance_counts[d as usize] += 1;
             }
         }
-        Encoder {
-            literal: huffman::EncoderBuilder::from_frequencies(&literal_counts, 15),
-            distance: huffman::EncoderBuilder::from_frequencies(&distance_counts, 15),
-        }
+        Ok(Encoder {
+            literal: huffman::EncoderBuilder::from_frequencies(&literal_counts, 15)?,
+            distance: huffman::EncoderBuilder::from_frequencies(&distance_counts, 15)?,
+        })
     }
     fn save<W>(&self, writer: &mut bit::BitWriter<W>, codec: &Encoder) -> io::Result<()>
     where
@@ -331,7 +331,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         for x in &codes {
             code_counts[x.0 as usize] += 1;
         }
-        let bitwidth_encoder = huffman::EncoderBuilder::from_frequencies(&code_counts, 7);
+        let bitwidth_encoder = huffman::EncoderBuilder::from_frequencies(&code_counts, 7)?;
 
         let bitwidth_code_count = cmp::max(
             4,
@@ -379,7 +379,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             bitwidth_code_bitwidthes[i] = reader.read_bits(3)? as u8;
         }
         let bitwidth_decoder =
-            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, None);
+            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, None)?;
 
         let mut literal_code_bitwidthes = Vec::with_capacity(literal_code_count as usize);
         while literal_code_bitwidthes.len() < literal_code_count as usize {
@@ -412,8 +412,8 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             literal: huffman::DecoderBuilder::from_bitwidthes(
                 &literal_code_bitwidthes,
                 Some(END_OF_BLOCK),
-            ),
-            distance: huffman::DecoderBuilder::from_bitwidthes(&distance_code_bitwidthes, None),
+            )?,
+            distance: huffman::DecoderBuilder::from_bitwidthes(&distance_code_bitwidthes, None)?,
         })
     }
 }
