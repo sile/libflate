@@ -203,6 +203,11 @@ impl Decoder {
         match decoded {
             0...255 => Symbol::Literal(decoded as u8),
             256 => Symbol::EndOfBlock,
+            286 | 287 => {
+                let message = format!("The value {} must not occur in compressed data", decoded);
+                reader.set_last_error(io::Error::new(io::ErrorKind::InvalidData, message));
+                Symbol::EndOfBlock // dummy value
+            }
             length_code => {
                 let (base, extra_bits) =
                     unsafe { *LENGTH_TABLE.get_unchecked(length_code as usize - 257) };
