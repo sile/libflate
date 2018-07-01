@@ -399,7 +399,14 @@ impl HuffmanCodec for DynamicHuffmanCodec {
                 .or_else(|| literal_code_bitwidthes.last().cloned());
             distance_code_bitwidthes.extend(load_bitwidthes(reader, c, last)?);
         }
-        debug_assert_eq!(distance_code_bitwidthes.len(), distance_code_count as usize);
+        if distance_code_bitwidthes.len() > distance_code_count as usize {
+            let message = format!(
+                "The length of `distance_code_bitwidthes` is too large: actual={}, expected={}",
+                distance_code_bitwidthes.len(),
+                distance_code_count
+            );
+            return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+        }
 
         Ok(Decoder {
             literal: huffman::DecoderBuilder::from_bitwidthes(
