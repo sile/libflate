@@ -150,7 +150,7 @@ impl HeaderBuilder {
             .map(|d| d.as_secs() as u32)
             .unwrap_or(0);
         let header = Header {
-            modification_time: modification_time,
+            modification_time,
             compression_level: CompressionLevel::Unknown,
             os: Os::Unix,
             is_text: false,
@@ -159,7 +159,7 @@ impl HeaderBuilder {
             filename: None,
             comment: None,
         };
-        HeaderBuilder { header: header }
+        HeaderBuilder { header }
     }
 
     /// Sets the modification time (UNIX timestamp).
@@ -627,7 +627,7 @@ where
         let mut header = HeaderBuilder::new().finish();
         header.compression_level = From::from(lz77.compression_level());
         EncodeOptions {
-            header: header,
+            header,
             options: deflate::EncodeOptions::with_lz77(lz77),
         }
     }

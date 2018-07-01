@@ -381,8 +381,8 @@ where
 {
     fn new(huffman: H, lz77: E) -> Self {
         CompressBuf {
-            huffman: huffman,
-            lz77: lz77,
+            huffman,
+            lz77,
             buf: Vec::new(),
             original_size: 0,
         }
@@ -418,7 +418,7 @@ impl lz77::Sink for Vec<symbol::Symbol> {
                 length,
                 backward_distance,
             } => symbol::Symbol::Share {
-                length: length,
+                length,
                 distance: backward_distance,
             },
         };

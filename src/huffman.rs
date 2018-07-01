@@ -15,10 +15,7 @@ pub struct Code {
 impl Code {
     pub fn new(width: u8, bits: u16) -> Self {
         debug_assert!(width <= MAX_BITWIDTH);
-        Code {
-            width: width,
-            bits: bits,
-        }
+        Code { width, bits }
     }
     fn inverse_endian(&self) -> Self {
         let mut f = self.bits;
@@ -70,9 +67,9 @@ impl DecoderBuilder {
         debug_assert!(max_bitwidth <= MAX_BITWIDTH);
         DecoderBuilder {
             table: vec![u16::from(MAX_BITWIDTH) + 1; 1 << max_bitwidth],
-            eob_symbol: eob_symbol,
+            eob_symbol,
             eob_bitwidth: max_bitwidth,
-            max_bitwidth: max_bitwidth,
+            max_bitwidth,
         }
     }
     pub fn from_bitwidthes(bitwidthes: &[u8], eob_symbol: Option<u16>) -> io::Result<Decoder> {
@@ -267,7 +264,7 @@ mod length_limited_huffman_codes {
         pub fn single(symbol: u16, weight: usize) -> Self {
             Node {
                 symbols: vec![symbol],
-                weight: weight,
+                weight,
             }
         }
         pub fn merge(&mut self, other: Self) {

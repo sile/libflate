@@ -239,8 +239,8 @@ impl Header {
         }
         let compression_level = CompressionLevel::from_u2(flg >> 6);
         Ok(Header {
-            window_size: window_size,
-            compression_level: compression_level,
+            window_size,
+            compression_level,
         })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
@@ -292,7 +292,7 @@ where
     pub fn new(mut inner: R) -> io::Result<Self> {
         let header = Header::read_from(&mut inner)?;
         Ok(Decoder {
-            header: header,
+            header,
             reader: deflate::Decoder::new(inner),
             adler32: checksum::Adler32::new(),
             eos: false,

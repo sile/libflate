@@ -15,7 +15,7 @@ where
 {
     pub fn new(inner: W) -> Self {
         BitWriter {
-            inner: inner,
+            inner,
             buf: 0,
             end: 0,
         }

@@ -82,7 +82,7 @@ impl Lz77Encode for DefaultLz77Encoder {
                 if distance <= self.window_size as usize {
                     let length = 3 + longest_common_prefix(&self.buf, i + 3, j + 3);
                     sink.consume(Code::Pointer {
-                        length: length,
+                        length,
                         backward_distance: distance as u16,
                     });
                     for k in (i..).take(length as usize).skip(1) {

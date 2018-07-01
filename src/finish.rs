@@ -27,10 +27,7 @@ impl<T, E> Finish<T, E> {
     /// assert_eq!(failed.into_result(), Err("error"));
     /// ```
     pub fn new(value: T, error: Option<E>) -> Self {
-        Finish {
-            value: value,
-            error: error,
-        }
+        Finish { value, error }
     }
 
     /// Unwraps the instance.
