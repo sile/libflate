@@ -355,7 +355,9 @@ where
             if read_size == 0 {
                 self.eos = true;
                 let adler32 = self.reader.as_inner_mut().read_u32::<BigEndian>()?;
-                if adler32 != self.adler32.value() {
+                // checksum verification is skipped during fuzzing
+                // so that random data from fuzzer can reach actually interesting code
+                if cfg!(not(fuzzing)) && adler32 != self.adler32.value() {
                     Err(invalid_data_error!(
                         "Adler32 checksum mismatched: value={}, expected={}",
                         self.adler32.value(),
