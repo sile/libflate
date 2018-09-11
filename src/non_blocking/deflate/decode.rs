@@ -134,12 +134,14 @@ impl<R: Read> Read for Decoder<R> {
                     break;
                 }
                 DecoderState::LoadFixedHuffmanCode => {
-                    let symbol_decoder = self.bit_reader
+                    let symbol_decoder = self
+                        .bit_reader
                         .transaction(|r| symbol::FixedHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::LoadDynamicHuffmanCode => {
-                    let symbol_decoder = self.bit_reader
+                    let symbol_decoder = self
+                        .bit_reader
                         .transaction(|r| symbol::DynamicHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
