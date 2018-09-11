@@ -430,7 +430,7 @@ where
         0...15 => Box::new(iter::once(code as u8)),
         16 => {
             let count = reader.read_bits(2)? + 3;
-            let last = last.ok_or_else(|| invalid_data_error!("No preceeding value"))?;
+            let last = last.ok_or_else(|| invalid_data_error!("No preceding value"))?;
             Box::new(iter::repeat(last).take(count as usize))
         }
         17 => {
