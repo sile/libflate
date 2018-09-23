@@ -333,7 +333,8 @@ impl Header {
             (F_EXTRA, self.extra_field.is_some()),
             (F_NAME, self.filename.is_some()),
             (F_COMMENT, self.comment.is_some()),
-        ].iter()
+        ]
+            .iter()
             .filter(|e| e.1)
             .map(|e| e.0)
             .sum()
@@ -345,7 +346,7 @@ impl Header {
             is_verified: false,
             ..self.clone()
         }.write_to(&mut buf)
-            .unwrap();
+        .unwrap();
         crc.update(&buf);
         crc.value() as u16
     }

@@ -21,16 +21,14 @@ fn main() {
                 .value_name("FILE")
                 .takes_value(true)
                 .default_value("-"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("OUTPUT")
                 .short("o")
                 .long("output")
                 .value_name("FILE")
                 .takes_value(true)
                 .default_value("-"),
-        )
-        .arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
+        ).arg(Arg::with_name("VERBOSE").short("v").long("verbose"))
         .subcommand(SubCommand::with_name("copy"))
         .subcommand(
             SubCommand::with_name("byte-read").arg(
@@ -40,8 +38,7 @@ fn main() {
                     .takes_value(true)
                     .default_value("1"),
             ),
-        )
-        .subcommand(SubCommand::with_name("gzip-decode"))
+        ).subcommand(SubCommand::with_name("gzip-decode"))
         .subcommand(SubCommand::with_name("gzip-decode-multi"))
         .subcommand(SubCommand::with_name("gzip-encode"))
         .subcommand(SubCommand::with_name("zlib-decode"))
