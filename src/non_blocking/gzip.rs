@@ -127,7 +127,6 @@ impl<R: Read> Read for Decoder<R> {
             Ok(0)
         } else {
             let read_size = self.reader.read(buf)?;
-            self.crc32.update(&buf[..read_size]);
             if read_size == 0 {
                 let trailer = self
                     .reader
@@ -144,6 +143,7 @@ impl<R: Read> Read for Decoder<R> {
                     Ok(0)
                 }
             } else {
+                self.crc32.update(&buf[..read_size]);
                 Ok(read_size)
             }
         }
@@ -170,4 +170,13 @@ mod test {
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
+
+    #[test]
+    fn decode_works_noncompressed_block_offset_sync() {
+        let encoded = include_bytes!("../../data/noncompressed_block_offset_sync/offset.gz");
+        let decoded = include_bytes!("../../data/noncompressed_block_offset_sync/offset");
+        // decode_all(encoded).unwrap();
+        assert_eq!(decode_all(encoded).unwrap(), decoded.to_vec());
+    }
+
 }
