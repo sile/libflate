@@ -52,6 +52,8 @@ const LENGTH_TABLE: [(u16, u8); 29] = [
     (258, 0),
 ];
 
+const MAX_DISTANCE_CODE_COUNT: usize = 30;
+
 const DISTANCE_TABLE: [(u16, u8); 30] = [
     (1, 0),
     (2, 0),
@@ -370,6 +372,14 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         let literal_code_count = reader.read_bits(5)? + 257;
         let distance_code_count = reader.read_bits(5)? + 1;
         let bitwidth_code_count = reader.read_bits(4)? + 4;
+
+        if distance_code_count as usize > MAX_DISTANCE_CODE_COUNT {
+            let message = format!(
+                "The value of HDIST is too big: max={}, actual={}",
+                MAX_DISTANCE_CODE_COUNT, distance_code_count
+            );
+            return Err(io::Error::new(io::ErrorKind::InvalidData, message));
+        }
 
         let mut bitwidth_code_bitwidthes = [0; 19];
         for &i in BITWIDTH_CODE_ORDER

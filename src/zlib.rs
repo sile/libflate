@@ -739,4 +739,30 @@ mod test {
             77, 217, 100, 118, 49, 10, 64, 12, 125, 51, 202, 69, 67, 181, 146, 86,
         ]);
     }
+
+    #[test]
+    fn test_issues_16() {
+        // See: https://github.com/sile/libflate/issues/16
+
+        let encoded =
+            include_bytes!("../data/issues_16/crash-1bb6d408475a5bd57247ee40f290830adfe2086e");
+        assert_eq!(
+            decode_all(&encoded[..]).err().map(|e| e.to_string()),
+            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+        );
+
+        let encoded =
+            include_bytes!("../data/issues_16/crash-369e8509a0e76356f4549c292ceedee429cfe125");
+        assert_eq!(
+            decode_all(&encoded[..]).err().map(|e| e.to_string()),
+            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+        );
+
+        let encoded =
+            include_bytes!("../data/issues_16/crash-e75959d935650306881140df7f6d1d73e33425cb");
+        assert_eq!(
+            decode_all(&encoded[..]).err().map(|e| e.to_string()),
+            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+        );
+    }
 }
