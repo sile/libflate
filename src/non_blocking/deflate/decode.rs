@@ -247,7 +247,7 @@ impl BlockDecoder {
     }
 
     fn extend(&mut self, buf: &[u8]) {
-        self.buffer.extend(buf);
+        self.buffer.extend_from_slice(buf);
         self.offset += buf.len();
     }
 

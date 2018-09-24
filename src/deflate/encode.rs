@@ -344,7 +344,7 @@ impl RawBuf {
         RawBuf { buf: Vec::new() }
     }
     fn append(&mut self, buf: &[u8]) {
-        self.buf.extend(buf);
+        self.buf.extend_from_slice(buf);
     }
     fn len(&self) -> usize {
         self.buf.len()
