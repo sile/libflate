@@ -129,17 +129,19 @@ impl<R: Read> Read for Decoder<R> {
                     let buf = &mut buf[..cmp::min(buf_len, *len as usize)];
                     read_size = self.bit_reader.as_inner_mut().read(buf)?;
 
-                    self.block_decoder.buffer.extend(&buf[..read_size]);
+                    self.block_decoder.extend(&buf[..read_size]);
                     *len -= read_size as u16;
                     break;
                 }
                 DecoderState::LoadFixedHuffmanCode => {
-                    let symbol_decoder = self.bit_reader
+                    let symbol_decoder = self
+                        .bit_reader
                         .transaction(|r| symbol::FixedHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::LoadDynamicHuffmanCode => {
-                    let symbol_decoder = self.bit_reader
+                    let symbol_decoder = self
+                        .bit_reader
                         .transaction(|r| symbol::DynamicHuffmanCodec.load(r))?;
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
@@ -243,6 +245,12 @@ impl BlockDecoder {
             self.offset = new_len;
         }
     }
+
+    fn extend(&mut self, buf: &[u8]) {
+        self.buffer.extend_from_slice(buf);
+        self.offset += buf.len();
+    }
+
     fn decode_symbol<R: Read>(
         &mut self,
         bit_reader: &mut TransactionalBitReader<R>,

@@ -1,7 +1,7 @@
 libflate
 ========
 
-[![libflate](http://meritbadge.herokuapp.com/libflate)](https://crates.io/crates/libflate)
+[![libflate](https://img.shields.io/crates/v/libflate.svg)](https://crates.io/crates/libflate)
 [![Documentation](https://docs.rs/libflate/badge.svg)](https://docs.rs/libflate)
 [![Build Status](https://travis-ci.org/sile/libflate.svg?branch=master)](https://travis-ci.org/sile/libflate)
 [![Code Coverage](https://codecov.io/gh/sile/libflate/branch/master/graph/badge.svg)](https://codecov.io/gh/sile/libflate/branch/master)

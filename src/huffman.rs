@@ -168,7 +168,8 @@ impl EncoderBuilder {
             .enumerate()
             .filter(|e| *e.1 > 0)
             .last()
-            .map_or(0, |e| e.0) + 1;
+            .map_or(0, |e| e.0)
+            + 1;
         let builder = Self::new(symbol_count);
         builder.restore_canonical_huffman_codes(bitwidthes)
     }

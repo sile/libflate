@@ -82,7 +82,8 @@ impl<R: Read> Decoder<R> {
         if let Some(ref header) = self.header {
             Ok(header)
         } else {
-            let header = self.reader
+            let header = self
+                .reader
                 .bit_reader_mut()
                 .transaction(|r| Header::read_from(r.as_inner_mut()))?;
             self.header = Some(header);
@@ -127,7 +128,8 @@ impl<R: Read> Read for Decoder<R> {
         } else {
             let read_size = self.reader.read(buf)?;
             if read_size == 0 {
-                let adler32 = self.reader
+                let adler32 = self
+                    .reader
                     .bit_reader_mut()
                     .transaction(|r| r.as_inner_mut().read_u32::<BigEndian>())?;
                 self.eos = true;
