@@ -410,8 +410,9 @@ impl Header {
         if flags & F_COMMENT != 0 {
             this.comment = Some(read_cstring(&mut reader)?);
         }
-        // checksum verification is skipped during fuzzing
-        // so that random data from fuzzer can reach actually interesting code
+        // Checksum verification is skipped during fuzzing
+        // so that random data from fuzzer can reach actually interesting code.
+        // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
         if flags & F_HCRC != 0 && cfg!(not(fuzzing)) {
             let crc = reader.read_u16::<LittleEndian>()?;
             let expected = this.crc16();
@@ -956,6 +957,7 @@ where
                 let trailer = Trailer::read_from(self.reader.as_inner_mut())?;
                 // checksum verification is skipped during fuzzing
                 // so that random data from fuzzer can reach actually interesting code
+                // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
                 if cfg!(not(fuzzing)) && trailer.crc32 != self.crc32.value() {
                     Err(invalid_data_error!(
                         "CRC32 mismatched: value={}, expected={}",

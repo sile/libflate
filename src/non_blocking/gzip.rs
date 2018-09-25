@@ -135,6 +135,7 @@ impl<R: Read> Read for Decoder<R> {
                 self.eos = true;
                 // checksum verification is skipped during fuzzing
                 // so that random data from fuzzer can reach actually interesting code
+                // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
                 if cfg!(not(fuzzing)) && trailer.crc32() != self.crc32.value() {
                     Err(invalid_data_error!(
                         "CRC32 mismatched: value={}, expected={}",
