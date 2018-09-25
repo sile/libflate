@@ -133,7 +133,10 @@ impl<R: Read> Read for Decoder<R> {
                     .bit_reader_mut()
                     .transaction(|r| Trailer::read_from(r.as_inner_mut()))?;
                 self.eos = true;
-                if trailer.crc32() != self.crc32.value() {
+                // checksum verification is skipped during fuzzing
+                // so that random data from fuzzer can reach actually interesting code
+                // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
+                if cfg!(not(fuzzing)) && trailer.crc32() != self.crc32.value() {
                     Err(invalid_data_error!(
                         "CRC32 mismatched: value={}, expected={}",
                         self.crc32.value(),

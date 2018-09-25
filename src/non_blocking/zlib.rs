@@ -133,7 +133,10 @@ impl<R: Read> Read for Decoder<R> {
                     .bit_reader_mut()
                     .transaction(|r| r.as_inner_mut().read_u32::<BigEndian>())?;
                 self.eos = true;
-                if adler32 != self.adler32.value() {
+                // checksum verification is skipped during fuzzing
+                // so that random data from fuzzer can reach actually interesting code
+                // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
+                if cfg!(not(fuzzing)) && adler32 != self.adler32.value() {
                     Err(invalid_data_error!(
                         "Adler32 checksum mismatched: value={}, expected={}",
                         self.adler32.value(),
