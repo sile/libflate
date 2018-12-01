@@ -1,5 +1,5 @@
 use adler32::RollingAdler32;
-use crc::{crc32, Hasher32};
+use crc32fast;
 use std::fmt;
 
 pub struct Adler32(RollingAdler32);
@@ -20,16 +20,16 @@ impl fmt::Debug for Adler32 {
     }
 }
 
-pub struct Crc32(crc32::Digest);
+pub struct Crc32(crc32fast::Hasher);
 impl Crc32 {
     pub fn new() -> Self {
-        Crc32(crc32::Digest::new(crc32::IEEE))
+        Crc32(crc32fast::Hasher::new())
     }
     pub fn value(&self) -> u32 {
-        self.0.sum32()
+        self.0.clone().finalize()
     }
     pub fn update(&mut self, buf: &[u8]) {
-        self.0.write(buf);
+        self.0.update(buf);
     }
 }
 impl fmt::Debug for Crc32 {

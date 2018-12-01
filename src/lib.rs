@@ -3,7 +3,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(inline_always))]
 extern crate adler32;
 extern crate byteorder;
-extern crate crc;
+extern crate crc32fast;
 
 pub use finish::Finish;
 
