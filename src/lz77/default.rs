@@ -156,7 +156,7 @@ struct LargePrefixTable {
 impl LargePrefixTable {
     fn new() -> Self {
         LargePrefixTable {
-            table: (0..0xFFFF + 1).map(|_| Vec::new()).collect(),
+            table: (0..=0xFFFF).map(|_| Vec::new()).collect(),
         }
     }
 

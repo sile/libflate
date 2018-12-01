@@ -119,8 +119,8 @@ where
                         let start = old_len - distance as usize;
                         let ptr = self.buffer.as_mut_ptr();
                         util::ptr_copy(
-                            ptr.offset(start as isize),
-                            ptr.offset(old_len as isize),
+                            ptr.add(start),
+                            ptr.add(old_len),
                             length as usize,
                             length > distance,
                         );
@@ -138,7 +138,7 @@ where
             let new_len = lz77::MAX_DISTANCE as usize;
             unsafe {
                 let ptr = self.buffer.as_mut_ptr();
-                let src = ptr.offset((self.buffer.len() - new_len) as isize);
+                let src = ptr.add(self.buffer.len() - new_len);
                 ptr::copy_nonoverlapping(src, ptr, new_len);
             }
             self.buffer.truncate(new_len);
