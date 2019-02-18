@@ -93,7 +93,7 @@ impl<R: Read> Read for Decoder<R> {
                         0b11 => {
                             return Err(invalid_data_error!(
                                 "btype 0x11 of DEFLATE is reserved(error) value"
-                            ))
+                            ));
                         }
                         _ => unreachable!(),
                     }

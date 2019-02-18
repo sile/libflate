@@ -334,10 +334,10 @@ impl Header {
             (F_NAME, self.filename.is_some()),
             (F_COMMENT, self.comment.is_some()),
         ]
-            .iter()
-            .filter(|e| e.1)
-            .map(|e| e.0)
-            .sum()
+        .iter()
+        .filter(|e| e.1)
+        .map(|e| e.0)
+        .sum()
     }
     fn crc16(&self) -> u16 {
         let mut crc = checksum::Crc32::new();
@@ -345,7 +345,8 @@ impl Header {
         Header {
             is_verified: false,
             ..self.clone()
-        }.write_to(&mut buf)
+        }
+        .write_to(&mut buf)
         .unwrap();
         crc.update(&buf);
         crc.value() as u16
