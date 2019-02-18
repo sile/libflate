@@ -221,9 +221,10 @@ impl HeaderBuilder {
     ///
     /// # Examples
     /// ```
-    /// use libflate::gzip::{HeaderBuilder, ExtraField};
+    /// use libflate::gzip::{HeaderBuilder, ExtraField, ExtraSubField};
     ///
-    /// let extra = ExtraField{id: [0, 1], data: vec![2, 3, 4]};
+    /// let subfield = ExtraSubField{id: [0, 1], data: vec![2, 3, 4]};
+    /// let extra = ExtraField{subfields: vec![subfield]};
     /// let header = HeaderBuilder::new().extra_field(extra.clone()).finish();
     /// assert_eq!(header.extra_field(), Some(&extra));
     /// ```
@@ -448,35 +449,63 @@ where
 /// Extra field of a GZIP header.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExtraField {
-    /// ID of the extra field.
-    pub id: [u8; 2],
-
     /// Data of the extra field.
-    pub data: Vec<u8>,
+    pub subfields: Vec<ExtraSubField>,
 }
 impl ExtraField {
     fn read_from<R>(mut reader: R) -> io::Result<Self>
     where
         R: io::Read,
     {
-        let mut extra = ExtraField {
+        let mut subfields = Vec::new();
+        let data_size = reader.read_u16::<LittleEndian>()? as usize;
+        let mut reader = reader.take(data_size as u64);
+        while reader.limit() > 0 {
+            subfields.push(ExtraSubField::read_from(&mut reader)?);
+        }
+        Ok(ExtraField { subfields })
+    }
+    fn write_to<W>(&self, mut writer: W) -> io::Result<()>
+    where
+        W: io::Write,
+    {
+        let len = self.subfields.iter().map(|f| f.write_len()).sum::<usize>();
+        if len > 0xFFFF {
+            return Err(invalid_data_error!("extra field too long: {}", len));
+        }
+        writer.write_u16::<LittleEndian>(len as u16)?;
+        for f in &self.subfields {
+            f.write_to(&mut writer)?;
+        }
+        Ok(())
+    }
+}
+
+/// A sub field in the extra field of a GZIP header.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExtraSubField {
+    /// ID of the field.
+    pub id: [u8; 2],
+
+    /// Data of the field.
+    pub data: Vec<u8>,
+}
+impl ExtraSubField {
+    fn read_from<R>(mut reader: R) -> io::Result<Self>
+    where
+        R: io::Read,
+    {
+        let mut field = ExtraSubField {
             id: [0; 2],
             data: Vec::new(),
         };
+
+        reader.read_exact(&mut field.id)?;
         let data_size = reader.read_u16::<LittleEndian>()? as usize;
-        if data_size < 2 {
-            return Err(invalid_data_error!(
-                "extra field is too short: {}",
-                data_size
-            ));
-        }
+        field.data.resize(data_size, 0);
+        reader.read_exact(&mut field.data)?;
 
-        reader.read_exact(&mut extra.id)?;
-
-        extra.data.resize(data_size - 2, 0);
-        reader.read_exact(&mut extra.data)?;
-
-        Ok(extra)
+        Ok(field)
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
     where
@@ -486,6 +515,9 @@ impl ExtraField {
         writer.write_u16::<LittleEndian>(self.data.len() as u16)?;
         writer.write_all(&self.data)?;
         Ok(())
+    }
+    fn write_len(&self) -> usize {
+        4 + self.data.len()
     }
 }
 
@@ -1115,7 +1147,7 @@ where
 mod test {
     use super::*;
     use finish::AutoFinish;
-    use std::io;
+    use std::io::{self, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -1188,5 +1220,48 @@ mod test {
     fn issue_15_3() {
         let data = b"\x1F\x8B\x08\xC1\x91\x28\x71\xDC\xF2\x2D\x34\x35\x31\x35\x34\x30\x70\x6E\x60\x35\x31\x32\x32\x33\x32\x33\x37\x32\x36\x38\xDD\x1C\xE5\x2A\xDD\xDD\xDD\x22\xDD\xDD\xDD\xDC\x88\x13\xC9\x40\x60\xA7";
         assert!(decode(&data[..]).is_err());
+    }
+
+    #[test]
+    fn extra_field() {
+        let f = ExtraField {
+            subfields: vec![ExtraSubField {
+                id: [0, 0x42],
+                data: "abc".into(),
+            }],
+        };
+
+        let mut buf = Vec::new();
+        f.write_to(&mut buf).unwrap();
+
+        assert_eq!(ExtraField::read_from(&buf[..]).unwrap(), f);
+    }
+
+    #[test]
+    fn encode_with_extra_field() {
+        let mut buf = Vec::new();
+        let extra_field = ExtraField {
+            subfields: vec![ExtraSubField {
+                id: [0, 0x42],
+                data: "abc".into(),
+            }],
+        };
+        {
+            // encode
+            let header = HeaderBuilder::new()
+                .extra_field(extra_field.clone())
+                .finish();
+
+            let ops = EncodeOptions::new().header(header);
+            let mut encoder = Encoder::with_options(&mut buf, ops).unwrap();
+            write!(encoder, "hello world").unwrap();
+            encoder.finish().as_result().unwrap();
+        }
+        {
+            // decode
+            let mut decoder = Decoder::new(&buf[..]).unwrap();
+            io::copy(&mut decoder, &mut io::sink()).unwrap();
+            assert_eq!(decoder.header().extra_field(), Some(&extra_field));
+        }
     }
 }
