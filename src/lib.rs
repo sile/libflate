@@ -1,6 +1,5 @@
 //! A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
 #![warn(missing_docs)]
-#![cfg_attr(feature = "cargo-clippy", allow(inline_always))]
 extern crate adler32;
 extern crate byteorder;
 extern crate crc32fast;

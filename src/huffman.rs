@@ -324,7 +324,6 @@ mod length_limited_huffman_codes {
         if nodes.len() >= 2 {
             let new_len = nodes.len() / 2;
 
-            #[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
             for i in 0..new_len {
                 nodes[i] = mem::replace(&mut nodes[i * 2], Node::empty());
                 let other = mem::replace(&mut nodes[i * 2 + 1], Node::empty());
