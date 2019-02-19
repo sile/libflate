@@ -1,6 +1,6 @@
 [package]
 name = "libflate"
-version = "0.1.19"
+version = "0.1.20"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 description = "A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP)"
 homepage = "https://github.com/sile/libflate"
