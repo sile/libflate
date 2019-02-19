@@ -87,7 +87,7 @@ const DISTANCE_TABLE: [(u16, u8); 30] = [
     (24_577, 13),
 ];
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Symbol {
     EndOfBlock,
     Literal(u8),
