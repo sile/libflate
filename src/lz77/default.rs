@@ -86,6 +86,9 @@ impl Lz77Encode for DefaultLz77Encoder {
                         backward_distance: distance as u16,
                     });
                     for k in (i..).take(length as usize).skip(1) {
+                        if k >= end {
+                            break;
+                        }
                         prefix_table.insert(prefix(&self.buf[k..]), k as u32);
                     }
                     i += length as usize;
@@ -177,5 +180,30 @@ impl LargePrefixTable {
         }
         positions.push((p2, position));
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deflate::symbol::Symbol;
+
+    #[test]
+    // See: https://github.com/sile/libflate/issues/21
+    fn issue21() {
+        let mut enc = DefaultLz77Encoder::new();
+        let mut sink = Vec::new();
+        enc.encode(b"aaaaa", &mut sink);
+        enc.flush(&mut sink);
+        assert_eq!(
+            sink,
+            vec![
+                Symbol::Literal(97),
+                Symbol::Share {
+                    length: 4,
+                    distance: 1
+                }
+            ]
+        );
     }
 }
