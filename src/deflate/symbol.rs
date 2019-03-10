@@ -310,11 +310,19 @@ impl HuffmanCodec for DynamicHuffmanCodec {
     fn build(&self, symbols: &[Symbol]) -> io::Result<Encoder> {
         let mut literal_counts = [0; 286];
         let mut distance_counts = [0; 30];
+        let mut empty_distance_table = true;
         for s in symbols {
             literal_counts[s.code() as usize] += 1;
             if let Some((d, _, _)) = s.distance() {
+                empty_distance_table = false;
                 distance_counts[d as usize] += 1;
             }
+        }
+        if empty_distance_table {
+            // Sets a dummy value because an empty distance table causes decoding error on Windows.
+            //
+            // See https://github.com/sile/libflate/issues/23 for more details.
+            distance_counts[0] = 1;
         }
         Ok(Encoder {
             literal: huffman::EncoderBuilder::from_frequencies(&literal_counts, 15)?,
