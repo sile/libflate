@@ -152,8 +152,8 @@ where
     /// encoder.write_all(b"Hello World!").unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
-    ///            [5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
-    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0]);
+    ///            [5, 192, 49, 13, 0, 0, 8, 3, 65, 43, 224, 6, 7, 24, 128, 237,
+    ///            147, 38, 245, 63, 244, 230, 65, 181, 50, 215, 1]);
     /// ```
     pub fn new(inner: W) -> Self {
         Self::with_options(inner, EncodeOptions::default())
@@ -199,8 +199,8 @@ where
     /// encoder.write_all(b"Hello World!").unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
-    ///            [5, 128, 65, 9, 0, 0, 8, 3, 171, 104, 27, 27, 88, 64, 127,
-    ///             7, 131, 245, 127, 140, 121, 80, 173, 204, 117, 0]);
+    ///            [5, 192, 49, 13, 0, 0, 8, 3, 65, 43, 224, 6, 7, 24, 128, 237,
+    ///            147, 38, 245, 63, 244, 230, 65, 181, 50, 215, 1]);
     /// ```
     pub fn finish(mut self) -> Finish<W, io::Error> {
         match self.block.finish(&mut self.writer) {
