@@ -145,10 +145,15 @@ impl HeaderBuilder {
     /// assert_eq!(header.comment(), None);
     /// ```
     pub fn new() -> Self {
+        // wasm-unknown-unknown does not implement the time module
+        #[cfg(not(target_arch = "wasm32"))]
         let modification_time = time::UNIX_EPOCH
             .elapsed()
             .map(|d| d.as_secs() as u32)
             .unwrap_or(0);
+        #[cfg(target_arch = "wasm32")]
+        let modification_time = 0;
+
         let header = Header {
             modification_time,
             compression_level: CompressionLevel::Unknown,
