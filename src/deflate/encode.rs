@@ -281,6 +281,8 @@ where
     where
         W: io::Write,
     {
+        writer.write_bit(false)?;
+        writer.write_bits(2, self.block_type as u16)?;
         self.block_buf.flush(writer)
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
@@ -435,8 +437,9 @@ impl lz77::Sink for Vec<symbol::Symbol> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Decoder;
     use super::*;
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
 
     #[test]
     fn issue_27() {
@@ -445,14 +448,22 @@ mod tests {
         let writes = ["fooooooooooooooooo", "bar", "baz"];
 
         let mut encoder = Encoder::new(Vec::new());
-        for string in writes.iter() {
-            encoder.write(string.as_bytes()).expect("Write failed");
+        for _ in 0..2 {
+            for string in writes.iter() {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
         }
+        let finished = encoder.finish().unwrap();
+        println!("{:?}", finished.0);
 
-        encoder.flush().expect("Flush failed");
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .read_to_end(&mut output)
+            .unwrap();
         assert_eq!(
-            encoder.as_inner_ref(),
-            &[11, 56, 52, 2, 0, 0, 32, 0, 56, 43, 65, 117, 39, 154, 94, 247, 242, 35, 66, 116]
-        )
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
+        );
     }
 }
