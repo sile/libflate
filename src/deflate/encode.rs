@@ -1,7 +1,7 @@
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
 use std::cmp;
-use std::io;
+use std::io::{self, Write};
 
 use super::symbol;
 use super::BlockType;
@@ -223,6 +223,17 @@ where
     pub fn into_inner(self) -> W {
         self.writer.into_inner()
     }
+
+    pub(crate) fn zlib_sync_flush(&mut self) -> io::Result<()> {
+        self.flush()?;
+
+        self.writer.write_bit(false)?;
+        self.writer.write_bits(2, BlockType::Raw as u16)?;
+        self.writer.flush()?;
+        self.writer.as_inner_mut().write_all(&[0, 0, 255, 255])?;
+
+        Ok(())
+    }
 }
 impl<W, E> io::Write for Encoder<W, E>
 where
@@ -283,7 +294,8 @@ where
     {
         writer.write_bit(false)?;
         writer.write_bits(2, self.block_type as u16)?;
-        self.block_buf.flush(writer)
+        self.block_buf.flush(writer)?;
+        Ok(())
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
     where

@@ -383,12 +383,14 @@ where
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
+    sync_flush: bool,
 }
 impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     fn default() -> Self {
         EncodeOptions {
             header: Header::from_lz77(&lz77::DefaultLz77Encoder::new()),
             options: Default::default(),
+            sync_flush: false,
         }
     }
 }
@@ -424,6 +426,7 @@ where
         EncodeOptions {
             header: Header::from_lz77(&lz77),
             options: deflate::EncodeOptions::with_lz77(lz77),
+            sync_flush: false,
         }
     }
 
@@ -472,12 +475,19 @@ where
         self.options = self.options.fixed_huffman_codes();
         self
     }
+
+    /// Sets `Z_SYNC_FLUSH` flag.
+    pub fn sync_flush(mut self) -> Self {
+        self.sync_flush = true;
+        self
+    }
 }
 
 /// ZLIB encoder.
 #[derive(Debug)]
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
+    sync_flush: bool,
     writer: deflate::Encoder<W, E>,
     adler32: checksum::Adler32,
 }
@@ -531,6 +541,7 @@ where
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
             header: options.header,
+            sync_flush: options.sync_flush,
             writer: deflate::Encoder::with_options(inner, options.options),
             adler32: checksum::Adler32::new(),
         })
@@ -616,7 +627,11 @@ where
         Ok(written_size)
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
+        if self.sync_flush {
+            self.writer.zlib_sync_flush()
+        } else {
+            self.writer.flush()
+        }
     }
 }
 impl<W, E> Complete for Encoder<W, E>
