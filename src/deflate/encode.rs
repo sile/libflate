@@ -234,6 +234,7 @@ where
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
+        self.block.flush(&mut self.writer)?;
         self.writer.as_inner_mut().flush()
     }
 }
@@ -275,6 +276,12 @@ where
             self.block_buf.flush(writer)?;
         }
         Ok(())
+    }
+    fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
+    where
+        W: io::Write,
+    {
+        self.block_buf.flush(writer)
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
     where
@@ -423,5 +430,29 @@ impl lz77::Sink for Vec<symbol::Symbol> {
             },
         };
         self.push(symbol);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    #[test]
+    fn issue_27() {
+        // See: https://github.com/sile/libflate/issues/27
+
+        let writes = ["fooooooooooooooooo", "bar", "baz"];
+
+        let mut encoder = Encoder::new(Vec::new());
+        for string in writes.iter() {
+            encoder.write(string.as_bytes()).expect("Write failed");
+        }
+
+        encoder.flush().expect("Flush failed");
+        assert_eq!(
+            encoder.as_inner_ref(),
+            &[11, 56, 52, 2, 0, 0, 32, 0, 56, 43, 65, 117, 39, 154, 94, 247, 242, 35, 66, 116]
+        )
     }
 }
