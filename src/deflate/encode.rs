@@ -1,7 +1,7 @@
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
 use std::cmp;
-use std::io::{self, Write};
+use std::io;
 
 use super::symbol;
 use super::BlockType;
@@ -225,14 +225,14 @@ where
     }
 
     pub(crate) fn zlib_sync_flush(&mut self) -> io::Result<()> {
-        self.flush()?;
+        self.block.flush(&mut self.writer, false)?;
 
         self.writer.write_bit(false)?;
         self.writer.write_bits(2, BlockType::Raw as u16)?;
         self.writer.flush()?;
         self.writer.as_inner_mut().write_all(&[0, 0, 255, 255])?;
 
-        Ok(())
+        self.writer.as_inner_mut().flush()
     }
 }
 impl<W, E> io::Write for Encoder<W, E>
@@ -245,7 +245,7 @@ where
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.block.flush(&mut self.writer)?;
+        self.block.flush(&mut self.writer, false)?;
         self.writer.as_inner_mut().flush()
     }
 }
@@ -282,17 +282,15 @@ where
     {
         self.block_buf.append(buf);
         while self.block_buf.len() >= self.block_size {
-            writer.write_bit(false)?;
-            writer.write_bits(2, self.block_type as u16)?;
-            self.block_buf.flush(writer)?;
+            self.flush(writer, false)?;
         }
         Ok(())
     }
-    fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
+    fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>, is_final: bool) -> io::Result<()>
     where
         W: io::Write,
     {
-        writer.write_bit(false)?;
+        writer.write_bit(is_final)?;
         writer.write_bits(2, self.block_type as u16)?;
         self.block_buf.flush(writer)?;
         Ok(())
@@ -301,9 +299,7 @@ where
     where
         W: io::Write,
     {
-        writer.write_bit(true)?;
-        writer.write_bits(2, self.block_type as u16)?;
-        self.block_buf.flush(writer)?;
+        self.flush(writer, true)?;
         writer.flush()?;
         Ok(())
     }

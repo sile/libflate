@@ -175,6 +175,31 @@ impl Lz77WindowSize {
     }
 }
 
+/// [zlib] library specific parameter for defining behavior when `Write::flush` method is called.
+///
+/// # References
+///
+/// - [Zlib Manual](https://www.zlib.net/manual.html)
+/// - [Zlib Flush Modes](https://www.bolet.org/~pornin/deflate-flush.html)
+///
+/// [zlib]: https://www.zlib.net/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum FlushMode {
+    /// `Z_NO_FLUSH` (default).
+    ///
+    /// Note that when this parameter is specified,
+    /// no `zlib` specific processing will not be executed but ordinal DEFLATE layer flushing will be performed.
+    None = 0,
+
+    /// `Z_SYNC_FLUSH`.
+    Sync = 2,
+}
+impl Default for FlushMode {
+    fn default() -> Self {
+        FlushMode::None
+    }
+}
+
 /// ZLIB header.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
@@ -383,14 +408,14 @@ where
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
-    sync_flush: bool,
+    flush_mode: FlushMode,
 }
 impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     fn default() -> Self {
         EncodeOptions {
             header: Header::from_lz77(&lz77::DefaultLz77Encoder::new()),
             options: Default::default(),
-            sync_flush: false,
+            flush_mode: FlushMode::None,
         }
     }
 }
@@ -426,7 +451,7 @@ where
         EncodeOptions {
             header: Header::from_lz77(&lz77),
             options: deflate::EncodeOptions::with_lz77(lz77),
-            sync_flush: false,
+            flush_mode: FlushMode::None,
         }
     }
 
@@ -476,9 +501,9 @@ where
         self
     }
 
-    /// Sets `Z_SYNC_FLUSH` flag.
-    pub fn sync_flush(mut self) -> Self {
-        self.sync_flush = true;
+    /// Specifies flush mode.
+    pub fn flush_mode(mut self, mode: FlushMode) -> Self {
+        self.flush_mode = mode;
         self
     }
 }
@@ -487,7 +512,7 @@ where
 #[derive(Debug)]
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
-    sync_flush: bool,
+    flush_mode: FlushMode,
     writer: deflate::Encoder<W, E>,
     adler32: checksum::Adler32,
 }
@@ -541,7 +566,7 @@ where
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
             header: options.header,
-            sync_flush: options.sync_flush,
+            flush_mode: options.flush_mode,
             writer: deflate::Encoder::with_options(inner, options.options),
             adler32: checksum::Adler32::new(),
         })
@@ -627,10 +652,9 @@ where
         Ok(written_size)
     }
     fn flush(&mut self) -> io::Result<()> {
-        if self.sync_flush {
-            self.writer.zlib_sync_flush()
-        } else {
-            self.writer.flush()
+        match self.flush_mode {
+            FlushMode::None => self.writer.flush(),
+            FlushMode::Sync => self.writer.zlib_sync_flush(),
         }
     }
 }
