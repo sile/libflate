@@ -109,14 +109,9 @@ impl Lz77Encode for DefaultLz77Encoder {
 }
 
 #[inline]
-fn prefix(buf: &[u8]) -> [u8; 3] {
-    unsafe {
-        [
-            *buf.get_unchecked(0),
-            *buf.get_unchecked(1),
-            *buf.get_unchecked(2),
-        ]
-    }
+fn prefix(input_buf: &[u8]) -> [u8; 3] {
+    let buf: &[u8] = &input_buf[..3]; // perform bounds check once
+    [buf[0], buf[1], buf[2]]
 }
 
 #[inline]
