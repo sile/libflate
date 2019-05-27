@@ -457,7 +457,7 @@ mod tests {
 
         let mut encoder = Encoder::new(Vec::new());
         for _ in 0..2 {
-            for string in writes.iter() {
+            for string in &writes {
                 encoder.write(string.as_bytes()).expect("Write failed");
             }
             encoder.flush().expect("Flush failed");

@@ -672,7 +672,7 @@ where
 mod test {
     use super::*;
     use finish::AutoFinish;
-    use std::io;
+    use std::io::{self, Read as _, Write as _};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -805,6 +805,71 @@ mod test {
         assert_eq!(
             decode_all(&encoded[..]).err().map(|e| e.to_string()),
             Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_issues_27() {
+        // See: https://github.com/sile/libflate/issues/27
+
+        let writes = ["fooooooooooooooooo", "bar", "baz"];
+
+        // FlushMode::None
+        let mut encoder = Encoder::new(Vec::new()).unwrap();
+        for _ in 0..2 {
+            for string in &writes {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
+        }
+        let finished = encoder.finish().unwrap();
+        let expected = vec![
+            120, 156, // header
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162,
+            227, 2, 14, 141, 0, 0, 0, 8, 0, 206, 74, 80, 221, 137, 166, 215, 189, 252, 136, 16, 93,
+            1, 112, 32, 0, 0, 0, 0, 0, 228, 255, 26, 246, 95, 20, 111,
+        ];
+        assert_eq!(finished.0, expected);
+
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .unwrap()
+            .read_to_end(&mut output)
+            .unwrap();
+        assert_eq!(
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
+        );
+
+        // FlushMode::Sync
+        let mut encoder =
+            Encoder::with_options(Vec::new(), EncodeOptions::new().flush_mode(FlushMode::Sync))
+                .unwrap();
+        for _ in 0..2 {
+            for string in &writes {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
+        }
+        let finished = encoder.finish().unwrap();
+        let expected = vec![
+            120, 156, // header
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162, 3,
+            0, 0, 255, 255, // sync bytes
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162, 3,
+            0, 0, 255, 255, // sync bytes
+            5, 192, 129, 0, 0, 0, 0, 0, 144, 255, 107, 0, 246, 95, 20, 111,
+        ];
+        assert_eq!(finished.0, expected);
+
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .unwrap()
+            .read_to_end(&mut output)
+            .unwrap();
+        assert_eq!(
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
         );
     }
 }
