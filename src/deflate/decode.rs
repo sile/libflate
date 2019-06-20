@@ -3,7 +3,6 @@ use byteorder::ReadBytesExt;
 use std::cmp;
 use std::io;
 use std::io::Read;
-use std::ptr;
 
 use super::symbol;
 use bit;
