@@ -235,11 +235,11 @@ impl BlockDecoder {
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
             let new_len = lz77::MAX_DISTANCE as usize;
-            unsafe {
-                let ptr = self.buffer.as_mut_ptr();
-                let src = ptr.add(self.buffer.len() - new_len);
-                ptr::copy_nonoverlapping(src, ptr, new_len);
+            { // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
             }
             self.buffer.truncate(new_len);
             self.offset = new_len;
