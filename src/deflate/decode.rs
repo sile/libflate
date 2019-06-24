@@ -87,6 +87,8 @@ where
             // pass uninitialized memory to .read_exact(), which does
             // NOT guarantee that it will never read from the buffer.
             // See https://github.com/rust-lang/rust/pull/62102/
+            // Surprisingly, zero-initializing the buffer here
+            // makes decoding 5% **faster** than using reserve() + set_len()
             self.buffer.resize(old_len + len as usize, 0);
             self.bit_reader
                 .as_inner_mut()
