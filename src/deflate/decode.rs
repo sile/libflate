@@ -83,8 +83,13 @@ where
             ))
         } else {
             let old_len = self.buffer.len();
-            self.buffer.reserve(len as usize);
-            unsafe { self.buffer.set_len(old_len + len as usize) };
+            // We cannot use `self.buffer.set_len()` here because that would
+            // pass uninitialized memory to .read_exact(), which does
+            // NOT guarantee that it will never read from the buffer.
+            // See https://github.com/rust-lang/rust/pull/62102/
+            // Surprisingly, zero-initializing the buffer here
+            // makes decoding 5% **faster** than using reserve() + set_len()
+            self.buffer.resize(old_len + len as usize, 0);
             self.bit_reader
                 .as_inner_mut()
                 .read_exact(&mut self.buffer[old_len..])?;
