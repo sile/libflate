@@ -18,6 +18,7 @@ codecov = {repository = "sile/libflate"}
 adler32 = "1"
 byteorder = "1"
 crc32fast = "1"
+rle-decode-helper = {git = "https://github.com/Shnatsel/rle-decode-helper.git"}
 
 [dev-dependencies]
 clap = "2"
