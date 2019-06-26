@@ -165,7 +165,7 @@ impl LargePrefixTable {
         let p2 = prefix[2];
 
         let i = (p0 << 8) + p1;
-        let positions = unsafe { self.table.get_unchecked_mut(i) };
+        let positions = &mut self.table[i];
         for &mut (key, ref mut value) in positions.iter_mut() {
             if key == p2 {
                 let old = *value;
