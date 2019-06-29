@@ -212,7 +212,7 @@ impl Decoder {
             }
             length_code => {
                 let (base, extra_bits) =
-                    unsafe { *LENGTH_TABLE.get_unchecked(length_code as usize - 257) };
+                    LENGTH_TABLE[length_code as usize - 257];
                 let extra = reader.read_bits_unchecked(extra_bits);
                 Symbol::Share {
                     length: base + extra,
@@ -227,7 +227,7 @@ impl Decoder {
         R: io::Read,
     {
         let decoded = self.distance.decode_unchecked(reader) as usize;
-        let (base, extra_bits) = unsafe { *DISTANCE_TABLE.get_unchecked(decoded) };
+        let (base, extra_bits) = DISTANCE_TABLE[decoded];
         let extra = reader.read_bits_unchecked(extra_bits);
         base + extra
     }
