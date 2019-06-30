@@ -3,6 +3,7 @@
 extern crate adler32;
 extern crate byteorder;
 extern crate crc32fast;
+extern crate take_mut;
 
 pub use finish::Finish;
 
