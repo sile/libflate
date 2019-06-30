@@ -8,7 +8,6 @@ use rle_decode_fast::rle_decode;
 use super::symbol;
 use bit;
 use lz77;
-use util;
 
 /// DEFLATE decoder.
 #[derive(Debug)]
