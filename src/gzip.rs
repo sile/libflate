@@ -1120,12 +1120,18 @@ where
         // take_mut closure must have the type it borrows as return type,
         // so we put the function return result to this variable instead.
         // If function logic is correct, these initial values will never be returned.
-        let mut result: io::Result<usize> = Err(
-            io::Error::new(io::ErrorKind::Other, "If you see this error, please report a bug in libflate")
-        );
+        let mut result: io::Result<usize> = Err(io::Error::new(
+            io::ErrorKind::Other,
+            "If you see this error, please report a bug in libflate",
+        ));
         if read_size == 0 {
             take_mut::take(self, |mut owned_self| {
-                let mut reader = owned_self.decoder.ok().take().expect("Never fails").into_inner();
+                let mut reader = owned_self
+                    .decoder
+                    .ok()
+                    .take()
+                    .expect("Never fails")
+                    .into_inner();
                 match Header::read_from(&mut reader) {
                     Err(e) => {
                         if e.kind() == io::ErrorKind::UnexpectedEof {

@@ -211,8 +211,7 @@ impl Decoder {
                 Symbol::EndOfBlock // dummy value
             }
             length_code => {
-                let (base, extra_bits) =
-                    LENGTH_TABLE[length_code as usize - 257];
+                let (base, extra_bits) = LENGTH_TABLE[length_code as usize - 257];
                 let extra = reader.read_bits_unchecked(extra_bits);
                 Symbol::Share {
                     length: base + extra,
