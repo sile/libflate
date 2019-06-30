@@ -3,7 +3,7 @@ use byteorder::ReadBytesExt;
 use std::cmp;
 use std::io;
 use std::io::Read;
-use rle_decode_helper::rle_decode;
+use rle_decode_fast::rle_decode;
 
 use super::symbol;
 use bit;
