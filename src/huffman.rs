@@ -99,9 +99,7 @@ impl Builder for DecoderBuilder {
                 );
                 return Err(io::Error::new(io::ErrorKind::InvalidData, message));
             }
-            unsafe {
-                *self.table.get_unchecked_mut(i) = value;
-            }
+            self.table[i] = value;
         }
         Ok(())
     }
@@ -137,11 +135,11 @@ impl Decoder {
         R: io::Read,
     {
         let code = reader.peek_bits_unchecked(self.eob_bitwidth);
-        let mut value = unsafe { *self.table.get_unchecked(code as usize) };
+        let mut value = self.table[code as usize];
         let mut bitwidth = (value & 0b1_1111) as u8;
         if bitwidth > self.eob_bitwidth {
             let code = reader.peek_bits_unchecked(self.max_bitwidth);
-            value = unsafe { *self.table.get_unchecked(code as usize) };
+            value = self.table[code as usize];
             bitwidth = (value & 0b1_1111) as u8;
             if bitwidth > self.max_bitwidth {
                 reader.set_last_error(invalid_data_error!("Invalid huffman coded stream"));
@@ -216,7 +214,7 @@ impl Encoder {
             symbol,
             self.table.len()
         );
-        unsafe { self.table.get_unchecked(symbol as usize) }.clone()
+        self.table[symbol as usize].clone()
     }
     pub fn used_max_symbol(&self) -> Option<u16> {
         self.table

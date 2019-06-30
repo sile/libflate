@@ -19,6 +19,7 @@ adler32 = "1"
 byteorder = "1"
 crc32fast = "1"
 rle-decode-helper = {git = "https://github.com/Shnatsel/rle-decode-helper.git"}
+take_mut = "0.2.2"
 
 [dev-dependencies]
 clap = "2"

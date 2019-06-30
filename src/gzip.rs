@@ -24,7 +24,6 @@ use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use std::ffi::CString;
 use std::io;
-use std::mem;
 use std::time;
 
 use checksum;
@@ -1118,33 +1117,37 @@ where
             Err(_) => return Ok(0),
             Ok(ref mut decoder) => decoder.read(buf)?,
         };
+        // take_mut closure must have the type it borrows as return type,
+        // so we put the function return result to this variable instead.
+        // If function logic is correct, these initial values will never be returned.
+        let mut result: io::Result<usize> = Err(
+            io::Error::new(io::ErrorKind::Other, "If you see this error, please report a bug in libflate")
+        );
         if read_size == 0 {
-            let mut reader = mem::replace(&mut self.decoder, Err(unsafe { mem::uninitialized() }))
-                .ok()
-                .take()
-                .expect("Never fails")
-                .into_inner();
-            match Header::read_from(&mut reader) {
-                Err(e) => {
-                    mem::forget(mem::replace(&mut self.decoder, Err(reader)));
-                    if e.kind() == io::ErrorKind::UnexpectedEof {
-                        Ok(0)
-                    } else {
-                        Err(e)
+            take_mut::take(self, |mut owned_self| {
+                let mut reader = owned_self.decoder.ok().take().expect("Never fails").into_inner();
+                match Header::read_from(&mut reader) {
+                    Err(e) => {
+                        if e.kind() == io::ErrorKind::UnexpectedEof {
+                            result = Ok(0);
+                        } else {
+                            result = Err(e);
+                        }
+                        owned_self.decoder = Err(reader);
+                        owned_self
+                    }
+                    Ok(header) => {
+                        owned_self.header = header.clone();
+                        owned_self.decoder = Ok(Decoder::with_header(reader, header));
+                        result = owned_self.read(buf);
+                        owned_self
                     }
                 }
-                Ok(header) => {
-                    self.header = header.clone();
-                    mem::forget(mem::replace(
-                        &mut self.decoder,
-                        Ok(Decoder::with_header(reader, header)),
-                    ));
-                    self.read(buf)
-                }
-            }
+            })
         } else {
-            Ok(read_size)
+            result = Ok(read_size);
         }
+        result
     }
 }
 
