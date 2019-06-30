@@ -1,6 +1,5 @@
 #[cfg(test)]
 use std::io::{self, Read};
-use std::ptr;
 
 #[cfg(test)]
 pub struct WouldBlockReader<R> {
