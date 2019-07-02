@@ -1,9 +1,9 @@
 use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
+use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
-use rle_decode_fast::rle_decode;
 
 use deflate::symbol::{self, HuffmanCodec};
 use lz77;
