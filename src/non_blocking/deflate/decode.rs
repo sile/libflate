@@ -3,12 +3,11 @@ use byteorder::ReadBytesExt;
 use std::cmp;
 use std::io;
 use std::io::Read;
+use rle_decode_fast::rle_decode;
 
 use deflate::symbol::{self, HuffmanCodec};
 use lz77;
 use non_blocking::transaction::TransactionalBitReader;
-use util;
-
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
 pub struct Decoder<R> {
@@ -210,19 +209,7 @@ impl BlockDecoder {
                             distance
                         ));
                     }
-                    let old_len = self.buffer.len();
-                    self.buffer.reserve(length as usize);
-                    unsafe {
-                        self.buffer.set_len(old_len + length as usize);
-                        let start = old_len - distance as usize;
-                        let ptr = self.buffer.as_mut_ptr();
-                        util::ptr_copy(
-                            ptr.add(start),
-                            ptr.add(old_len),
-                            length as usize,
-                            length > distance,
-                        );
-                    }
+                    rle_decode(&mut self.buffer, usize::from(distance), usize::from(length));
                 }
                 symbol::Symbol::EndOfBlock => {
                     self.eob = true;
