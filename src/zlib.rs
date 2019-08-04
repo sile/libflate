@@ -19,9 +19,6 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use byteorder::BigEndian;
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
 use std::io;
 
 use checksum;
@@ -203,8 +200,9 @@ impl Header {
     where
         R: io::Read,
     {
-        let cmf = reader.read_u8()?;
-        let flg = reader.read_u8()?;
+        let mut buf = [0; 2];
+        reader.read_exact(&mut buf)?;
+        let (cmf, flg) = (buf[0], buf[1]);
         let check = (u16::from(cmf) << 8) + u16::from(flg);
         if check % 31 != 0 {
             return Err(invalid_data_error!(
@@ -230,7 +228,9 @@ impl Header {
 
         let dict_flag = (flg & 0b100_000) != 0;
         if dict_flag {
-            let dictionary_id = reader.read_u32::<BigEndian>()?;
+            let mut buf = [0; 4];
+            reader.read_exact(&mut buf)?;
+            let dictionary_id = u32::from_be_bytes(buf);
             return Err(invalid_data_error!(
                 "Preset dictionaries are not supported: \
                  dictionary_id=0x{:X}",
@@ -253,8 +253,7 @@ impl Header {
         if check % 31 != 0 {
             flg += (31 - check % 31) as u8;
         }
-        writer.write_u8(cmf)?;
-        writer.write_u8(flg)?;
+        writer.write_all(&[cmf, flg])?;
         Ok(())
     }
 }
@@ -354,7 +353,10 @@ where
             let read_size = self.reader.read(buf)?;
             if read_size == 0 {
                 self.eos = true;
-                let adler32 = self.reader.as_inner_mut().read_u32::<BigEndian>()?;
+                let mut buf = [0; 4];
+                self.reader.as_inner_mut().read_exact(&mut buf)?;
+                let adler32 = u32::from_be_bytes(buf);
+
                 // checksum verification is skipped during fuzzing
                 // so that random data from fuzzer can reach actually interesting code
                 // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
@@ -582,7 +584,7 @@ where
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
         match inner
-            .write_u32::<BigEndian>(self.adler32.value())
+            .write_all(&self.adler32.value().to_be_bytes())
             .and_then(|_| inner.flush())
         {
             Ok(_) => Finish::new(inner, None),

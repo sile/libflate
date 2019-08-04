@@ -1,5 +1,3 @@
-use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
 use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
@@ -73,8 +71,11 @@ where
 
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
-        let len = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
-        let nlen = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
+        let mut buf = [0; 2];
+        self.bit_reader.as_inner_mut().read_exact(&mut buf)?;
+        let len = u16::from_le_bytes(buf);
+        self.bit_reader.as_inner_mut().read_exact(&mut buf)?;
+        let nlen = u16::from_le_bytes(buf);
         if !len != nlen {
             Err(invalid_data_error!(
                 "LEN={} is not the one's complement of NLEN={}",

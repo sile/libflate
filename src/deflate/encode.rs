@@ -1,5 +1,3 @@
-use byteorder::LittleEndian;
-use byteorder::WriteBytesExt;
 use std::cmp;
 use std::io;
 
@@ -357,10 +355,10 @@ impl RawBuf {
         writer.flush()?;
         writer
             .as_inner_mut()
-            .write_u16::<LittleEndian>(size as u16)?;
+            .write_all(&(size as u16).to_le_bytes())?;
         writer
             .as_inner_mut()
-            .write_u16::<LittleEndian>(!size as u16)?;
+            .write_all(&(!size as u16).to_le_bytes())?;
         writer.as_inner_mut().write_all(&self.buf[..size])?;
         self.buf.drain(0..size);
         Ok(())

@@ -20,8 +20,6 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use byteorder::BigEndian;
-use byteorder::ReadBytesExt;
 use std::io::{self, Read};
 
 use checksum;
@@ -128,10 +126,12 @@ impl<R: Read> Read for Decoder<R> {
         } else {
             let read_size = self.reader.read(buf)?;
             if read_size == 0 {
-                let adler32 = self
-                    .reader
-                    .bit_reader_mut()
-                    .transaction(|r| r.as_inner_mut().read_u32::<BigEndian>())?;
+                let adler32 = self.reader.bit_reader_mut().transaction(|r| {
+                    let mut buf = [0; 4];
+                    r.as_inner_mut()
+                        .read_exact(&mut buf)
+                        .and(Ok(u32::from_be_bytes(buf)))
+                })?;
                 self.eos = true;
                 // checksum verification is skipped during fuzzing
                 // so that random data from fuzzer can reach actually interesting code
