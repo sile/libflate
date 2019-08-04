@@ -400,8 +400,7 @@ impl Header {
             ));
         }
         let flags = buf[3];
-        this.modification_time =
-            u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
+        this.modification_time = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
         this.compression_level = CompressionLevel::from_u8(buf[8]);
         this.os = Os::from_u8(buf[9]);
         if flags & F_EXTRA != 0 {
