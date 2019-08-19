@@ -49,7 +49,7 @@ fn main() {
         .get_matches();
 
     let input_filename = matches.value_of("INPUT").unwrap();
-    let input: Box<io::Read> = if input_filename == "-" {
+    let input: Box<dyn io::Read> = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
         Box::new(
@@ -59,7 +59,7 @@ fn main() {
     let mut input = io::BufReader::new(input);
 
     let output_filename = matches.value_of("OUTPUT").unwrap();
-    let output: Box<io::Write> = if output_filename == "-" {
+    let output: Box<dyn io::Write> = if output_filename == "-" {
         Box::new(io::stdout())
     } else if output_filename == "/dev/null" {
         Box::new(io::sink())
