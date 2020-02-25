@@ -1,0 +1,19 @@
+[package]
+name = "libflate_lz77"
+version = "0.1.0"
+authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+edition = "2018"
+description = "LZ77 encoder for libflate crate"
+homepage = "https://github.com/sile/libflate"
+repository = "https://github.com/sile/libflate"
+readme = "README.md"
+keywords = ["lz77"]
+categories = ["compression"]
+license = "MIT"
+
+[badges]
+travis-ci = {repository = "sile/libflate"}
+codecov = {repository = "sile/libflate"}
+
+[dev-dependencies]
+libflate = { path = "../", version = "0.1" }

@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 extern crate adler32;
 extern crate crc32fast;
+extern crate libflate_lz77;
 extern crate rle_decode_fast;
 extern crate take_mut;
 

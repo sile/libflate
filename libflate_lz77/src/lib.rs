@@ -61,6 +61,14 @@ where
         (*self).consume(code);
     }
 }
+impl<T> Sink for Vec<T>
+where
+    T: From<Code>,
+{
+    fn consume(&mut self, code: Code) {
+        self.push(T::from(code));
+    }
+}
 
 /// The `LZ77Encode` trait defines the interface of LZ77 encoding algorithm.
 pub trait Lz77Encode {
