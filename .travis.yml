@@ -1,39 +1,72 @@
 language: rust
-sudo: required
-rust:
-  - stable
-  - beta
-  - nightly
+
 matrix:
+  include:
+  - name: "stable"
+    rust: stable
+    sudo: required
+    before_script: rustup component add clippy-preview
+    script:
+      - cargo test --all-features --all
+      - cargo clippy --all-features --all
+    env: RUSTFLAGS="-C link-dead-code -D warnings"
+    addons:
+      apt:
+        packages:
+          - libcurl4-openssl-dev
+          - libelf-dev
+          - libdw-dev
+          - cmake
+          - gcc
+          - binutils-dev
+          - libiberty-dev
+
+    after_success: |
+      wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+      tar xzf master.tar.gz &&
+      cd kcov-master &&
+      mkdir build &&
+      cd build &&
+      cmake .. &&
+      make &&
+      make install DESTDIR=../../kcov-build &&
+      cd ../.. &&
+      rm -rf kcov-master &&
+      for file in target/debug/*; do if ! [ -x $file -a -f $file ]; then continue; fi; mkdir -p "target/cov/$(basename $file)"; ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+      bash <(curl -s https://codecov.io/bash) &&
+      echo "Uploaded code coverage"
+
+  - name: "beta test"
+    rust: beta
+    script: cargo test --all-features --all
+
+  - name: "beta build"
+    rust: beta
+    script: cargo build --all-features --all
+    env: RUSTFLAGS="-D warnings"
+
+  - name: "beta clippy"
+    rust: beta
+    before_script: rustup component add clippy-preview
+    script: cargo clippy --all-features --all
+    env: RUSTFLAGS="-D warnings"
+
+  - name: "nightly test"
+    rust: nightly
+    script: cargo test --all-features --all
+
+  - name: "nightly build"
+    rust: nightly
+    script: cargo build --all-features --all
+    env: RUSTFLAGS="-D warnings"
+
+  - name: "nightly clippy"
+    rust: nightly
+    before_script: rustup component add clippy-preview
+    script: cargo clippy --all-features --all
+    env: RUSTFLAGS="-D warnings"
+
   allow_failures:
     - rust: nightly
-
-env:
-  global:
-  - RUSTFLAGS="-C link-dead-code"
-
-addons:
-  apt:
-    packages:
-      - libcurl4-openssl-dev
-      - libelf-dev
-      - libdw-dev
-      - cmake
-      - gcc
-      - binutils-dev
-      - libiberty-dev
-
-after_success: |
-  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-  tar xzf master.tar.gz &&
-  cd kcov-master &&
-  mkdir build &&
-  cd build &&
-  cmake .. &&
-  make &&
-  make install DESTDIR=../../kcov-build &&
-  cd ../.. &&
-  rm -rf kcov-master &&
-  for file in target/debug/libflate-*[^\.d]; do mkdir -p "target/cov/$(basename $file)"; ./kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
-  bash <(curl -s https://codecov.io/bash) &&
-  echo "Uploaded code coverage"
+    - name: "beta build"
+    - name: "beta clippy"
