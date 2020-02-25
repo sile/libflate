@@ -6,6 +6,7 @@ use std::ops::Range;
 use bit;
 use huffman;
 use huffman::Builder;
+use lz77;
 
 const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
     (8, 000..144, 0b0_0011_0000),
@@ -148,6 +149,20 @@ impl Symbol {
             }
         } else {
             None
+        }
+    }
+}
+impl From<lz77::Code> for Symbol {
+    fn from(code: lz77::Code) -> Self {
+        match code {
+            lz77::Code::Literal(b) => Symbol::Literal(b),
+            lz77::Code::Pointer {
+                length,
+                backward_distance,
+            } => Symbol::Share {
+                length,
+                distance: backward_distance,
+            },
         }
     }
 }

@@ -407,19 +407,3 @@ where
         Ok(())
     }
 }
-
-impl lz77::Sink for Vec<symbol::Symbol> {
-    fn consume(&mut self, code: lz77::Code) {
-        let symbol = match code {
-            lz77::Code::Literal(b) => symbol::Symbol::Literal(b),
-            lz77::Code::Pointer {
-                length,
-                backward_distance,
-            } => symbol::Symbol::Share {
-                length,
-                distance: backward_distance,
-            },
-        };
-        self.push(symbol);
-    }
-}
