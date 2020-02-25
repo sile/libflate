@@ -15,4 +15,5 @@ license = "MIT"
 travis-ci = {repository = "sile/libflate"}
 codecov = {repository = "sile/libflate"}
 
-[dependencies]
+[dev-dependencies]
+libflate = { path = "../", version = "0.1" }
