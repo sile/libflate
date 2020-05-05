@@ -68,6 +68,13 @@ where
         self.bit_reader.into_inner()
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.bit_reader.reset();
+        self.buffer.clear();
+        self.offset = 0;
+        self.eos = false
+    }
+
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
         let mut buf = [0; 2];

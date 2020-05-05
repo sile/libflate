@@ -980,6 +980,13 @@ where
             eos: false,
         }
     }
+
+    fn reset(&mut self, header: Header) {
+        self.header = header;
+        self.reader.reset();
+        self.crc32 = checksum::Crc32::new();
+        self.eos = false;
+    }
 }
 impl<R> io::Read for Decoder<R>
 where
@@ -1016,8 +1023,8 @@ where
 /// A decoder that decodes all members in a GZIP stream.
 #[derive(Debug)]
 pub struct MultiDecoder<R> {
-    header: Header,
-    decoder: Result<Decoder<R>, R>,
+    decoder: Decoder<R>,
+    eos: bool,
 }
 impl<R> MultiDecoder<R>
 where
@@ -1051,8 +1058,8 @@ where
     pub fn new(inner: R) -> io::Result<Self> {
         let decoder = Decoder::new(inner)?;
         Ok(MultiDecoder {
-            header: decoder.header().clone(),
-            decoder: Ok(decoder),
+            decoder,
+            eos: false,
         })
     }
 
@@ -1070,23 +1077,17 @@ where
     /// assert_eq!(decoder.header().os(), Os::Unix);
     /// ```
     pub fn header(&self) -> &Header {
-        &self.header
+        self.decoder.header()
     }
 
     /// Returns the immutable reference to the inner stream.
     pub fn as_inner_ref(&self) -> &R {
-        match self.decoder {
-            Err(ref reader) => reader,
-            Ok(ref decoder) => decoder.as_inner_ref(),
-        }
+        self.decoder.as_inner_ref()
     }
 
     /// Returns the mutable reference to the inner stream.
     pub fn as_inner_mut(&mut self) -> &mut R {
-        match self.decoder {
-            Err(ref mut reader) => reader,
-            Ok(ref mut decoder) => decoder.as_inner_mut(),
-        }
+        self.decoder.as_inner_mut()
     }
 
     /// Unwraps this `MultiDecoder`, returning the underlying reader.
@@ -1104,10 +1105,7 @@ where
     /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data[..]);
     /// ```
     pub fn into_inner(self) -> R {
-        match self.decoder {
-            Err(reader) => reader,
-            Ok(decoder) => decoder.into_inner(),
-        }
+        self.decoder.into_inner()
     }
 }
 impl<R> io::Read for MultiDecoder<R>
@@ -1115,47 +1113,29 @@ where
     R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let read_size = match self.decoder {
-            Err(_) => return Ok(0),
-            Ok(ref mut decoder) => decoder.read(buf)?,
-        };
-        // take_mut closure must have the type it borrows as return type,
-        // so we put the function return result to this variable instead.
-        // If function logic is correct, these initial values will never be returned.
-        let mut result: io::Result<usize> = Err(io::Error::new(
-            io::ErrorKind::Other,
-            "If you see this error, please report a bug in libflate",
-        ));
+        if self.eos {
+            return Ok(0);
+        }
+
+        let read_size = self.decoder.read(buf)?;
         if read_size == 0 {
-            take_mut::take(self, |mut owned_self| {
-                let mut reader = owned_self
-                    .decoder
-                    .ok()
-                    .take()
-                    .expect("Never fails")
-                    .into_inner();
-                match Header::read_from(&mut reader) {
-                    Err(e) => {
-                        if e.kind() == io::ErrorKind::UnexpectedEof {
-                            result = Ok(0);
-                        } else {
-                            result = Err(e);
-                        }
-                        owned_self.decoder = Err(reader);
-                        owned_self
-                    }
-                    Ok(header) => {
-                        owned_self.header = header.clone();
-                        owned_self.decoder = Ok(Decoder::with_header(reader, header));
-                        result = owned_self.read(buf);
-                        owned_self
+            match Header::read_from(self.as_inner_mut()) {
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::UnexpectedEof {
+                        self.eos = true;
+                        Ok(0)
+                    } else {
+                        Err(e)
                     }
                 }
-            })
+                Ok(header) => {
+                    self.decoder.reset(header);
+                    self.read(buf)
+                }
+            }
         } else {
-            result = Ok(read_size);
+            Ok(read_size)
         }
-        result
     }
 }
 

@@ -79,6 +79,7 @@ where
             last_error: None,
         }
     }
+
     #[inline(always)]
     pub fn set_last_error(&mut self, e: io::Error) {
         self.last_error = Some(e);
