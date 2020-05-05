@@ -1,9 +1,7 @@
+//! Length-limited Huffman Codes.
+use crate::bit;
 use std::cmp;
-/// Length-limited Huffman Codes
-///
 use std::io;
-
-use bit;
 
 const MAX_BITWIDTH: u8 = 15;
 
@@ -334,7 +332,7 @@ mod length_limited_huffman_codes {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn it_works() {}
 }

@@ -1,11 +1,10 @@
+use super::symbol;
+use crate::bit;
+use crate::lz77;
 use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
-
-use super::symbol;
-use bit;
-use lz77;
 
 /// DEFLATE decoder.
 #[derive(Debug)]
@@ -185,9 +184,9 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
+    use crate::deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
     use std::io;
 
     #[test]
@@ -201,7 +200,7 @@ mod test {
             254, 27, 249, 75, 234, 124, 71, 116, 56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203,
             119, 142, 170, 169, 138, 202, 112, 228, 140, 38,
         ];
-        let mut bit_reader = ::bit::BitReader::new(&input[..]);
+        let mut bit_reader = crate::bit::BitReader::new(&input[..]);
         assert_eq!(bit_reader.read_bit().unwrap(), false); // not final block
         assert_eq!(bit_reader.read_bits(2).unwrap(), 0b10); // DynamicHuffmanCodec
         DynamicHuffmanCodec.load(&mut bit_reader).unwrap();

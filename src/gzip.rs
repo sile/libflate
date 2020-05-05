@@ -19,12 +19,11 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
+use crate::checksum;
+use crate::deflate;
+use crate::finish::{Complete, Finish};
+use crate::lz77;
 use std::{ffi::CString, io, time};
-
-use checksum;
-use deflate;
-use finish::{Complete, Finish};
-use lz77;
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -1161,9 +1160,9 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use finish::AutoFinish;
+    use crate::finish::AutoFinish;
     use std::io::{self, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {

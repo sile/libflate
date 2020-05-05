@@ -1,11 +1,5 @@
 //! A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
 #![warn(missing_docs)]
-extern crate adler32;
-extern crate crc32fast;
-extern crate libflate_lz77;
-extern crate rle_decode_fast;
-extern crate take_mut;
-
 pub use finish::Finish;
 
 macro_rules! invalid_data_error {
@@ -19,7 +13,7 @@ macro_rules! finish_try {
     ($e:expr) => {
         match $e.unwrap() {
             (inner, None) => inner,
-            (inner, error) => return ::finish::Finish::new(inner, error),
+            (inner, error) => return crate::finish::Finish::new(inner, error),
         }
     };
 }

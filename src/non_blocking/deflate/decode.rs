@@ -1,11 +1,11 @@
+use crate::deflate::symbol::{self, HuffmanCodec};
+use crate::lz77;
+use crate::non_blocking::transaction::TransactionalBitReader;
 use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
 
-use deflate::symbol::{self, HuffmanCodec};
-use lz77;
-use non_blocking::transaction::TransactionalBitReader;
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
 pub struct Decoder<R> {
@@ -271,11 +271,11 @@ impl Read for BlockDecoder {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use deflate::{EncodeOptions, Encoder};
+    use crate::deflate::{EncodeOptions, Encoder};
+    use crate::util::{nb_read_to_end, WouldBlockReader};
     use std::io::{self, Read};
-    use util::{nb_read_to_end, WouldBlockReader};
 
     #[test]
     fn it_works() {
@@ -309,7 +309,7 @@ mod test {
             .map(|i| format!("test {}", i))
             .collect();
 
-        let mut encoder = ::deflate::Encoder::new(Vec::new());
+        let mut encoder = crate::deflate::Encoder::new(Vec::new());
         io::copy(&mut text.as_bytes(), &mut encoder).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 

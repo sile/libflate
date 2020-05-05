@@ -20,11 +20,10 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
+use crate::checksum;
+use crate::non_blocking::deflate;
+use crate::zlib::Header;
 use std::io::{self, Read};
-
-use checksum;
-use non_blocking::deflate;
-use zlib::Header;
 
 /// ZLIB decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -154,11 +153,11 @@ impl<R: Read> Read for Decoder<R> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
+    use crate::util::{nb_read_to_end, WouldBlockReader};
+    use crate::zlib::{EncodeOptions, Encoder};
     use std::io;
-    use util::{nb_read_to_end, WouldBlockReader};
-    use zlib::{EncodeOptions, Encoder};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

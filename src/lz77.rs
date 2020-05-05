@@ -6,7 +6,7 @@ pub use libflate_lz77::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deflate::symbol::Symbol;
+    use crate::deflate::symbol::Symbol;
 
     #[test]
     // See: https://github.com/sile/libflate/issues/21

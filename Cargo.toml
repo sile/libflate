@@ -9,6 +9,7 @@ readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
 categories = ["compression"]
 license = "MIT"
+edition = "2018"
 
 [badges]
 travis-ci = {repository = "sile/libflate"}
