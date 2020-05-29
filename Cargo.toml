@@ -17,7 +17,7 @@ codecov = {repository = "sile/libflate"}
 
 [dependencies]
 adler32 = "1"
-crc32fast = "1"
+crc32fast = "1.1.1"
 libflate_lz77 = { path = "libflate_lz77", version = "1" }
 rle-decode-fast = "1.0.0"
 
