@@ -361,7 +361,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             BITWIDTH_CODE_ORDER
                 .iter()
                 .rev()
-                .position(|&i| bitwidth_encoder.lookup(i as u16).width > 0)
+                .position(|&i| code_counts[i] != 0 && bitwidth_encoder.lookup(i as u16).width > 0)
                 .map_or(0, |trailing_zeros| 19 - trailing_zeros),
         ) as u16;
         writer.write_bits(5, literal_code_count - 257)?;
