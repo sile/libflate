@@ -28,6 +28,9 @@ mod decode;
 mod encode;
 pub(crate) mod symbol;
 
+#[cfg(test)]
+pub(crate) mod test_data;
+
 #[derive(Debug, Clone, Copy)]
 enum BlockType {
     Raw = 0b00,
