@@ -406,3 +406,34 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_issues_52() {
+        // see: https://github.com/sile/libflate/issues/52
+        let input = crate::deflate::test_data::ISSUE_52_INPUT;
+
+        const LIMIT_1: usize = 16_031;
+        const LIMIT_2: usize = LIMIT_1 + 1;
+
+        // Attempt 1 (should succeed)
+        //
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&input[0..LIMIT_1]).unwrap();
+        let compressed: Vec<u8> = encoder.finish().into_result().unwrap();
+
+        assert!(LIMIT_1 > compressed.len());
+
+        // Attempt 2 (will fail without patch)
+        //
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&input[0..LIMIT_2]).unwrap();
+        let compressed: Vec<u8> = encoder.finish().into_result().unwrap();
+
+        assert!(LIMIT_2 > compressed.len());
+    }
+}
