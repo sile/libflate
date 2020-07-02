@@ -23,7 +23,7 @@ Add following lines to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-libflate = "0.1"
+libflate = "1"
 ```
 
 An Example
