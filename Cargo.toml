@@ -12,8 +12,7 @@ license = "MIT"
 edition = "2018"
 
 [badges]
-travis-ci = {repository = "sile/libflate"}
-codecov = {repository = "sile/libflate"}
+coveralls = {repository = "sile/libflate"}
 
 [dependencies]
 adler32 = "1"
