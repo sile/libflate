@@ -294,7 +294,7 @@ impl HuffmanCodec for FixedHuffmanCodec {
     where
         R: io::Read,
     {
-        let mut literal_builder = huffman::DecoderBuilder::new(9, Some(END_OF_BLOCK));
+        let mut literal_builder = huffman::DecoderBuilder::new(9, None, Some(END_OF_BLOCK));
         for &(bitwidth, ref symbols, code_base) in &FIXED_LITERAL_OR_LENGTH_CODE_TABLE {
             for (code, symbol) in symbols
                 .clone()
@@ -305,7 +305,8 @@ impl HuffmanCodec for FixedHuffmanCodec {
             }
         }
 
-        let mut distance_builder = huffman::DecoderBuilder::new(5, None);
+        let mut distance_builder =
+            huffman::DecoderBuilder::new(5, literal_builder.safely_peek_bitwidth(), None);
         for i in 0..30 {
             distance_builder.set_mapping(i, huffman::Code::new(5, i))?;
         }
@@ -410,7 +411,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             bitwidth_code_bitwidthes[i] = reader.read_bits(3)? as u8;
         }
         let bitwidth_decoder =
-            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, None)?;
+            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, Some(1), None)?;
 
         let mut literal_code_bitwidthes = Vec::with_capacity(literal_code_count as usize);
         while literal_code_bitwidthes.len() < literal_code_count as usize {
@@ -439,13 +440,17 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
 
-        Ok(Decoder {
-            literal: huffman::DecoderBuilder::from_bitwidthes(
-                &literal_code_bitwidthes,
-                Some(END_OF_BLOCK),
-            )?,
-            distance: huffman::DecoderBuilder::from_bitwidthes(&distance_code_bitwidthes, None)?,
-        })
+        let literal = huffman::DecoderBuilder::from_bitwidthes(
+            &literal_code_bitwidthes,
+            None,
+            Some(END_OF_BLOCK),
+        )?;
+        let distance = huffman::DecoderBuilder::from_bitwidthes(
+            &distance_code_bitwidthes,
+            Some(literal.safely_peek_bitwidth()),
+            None,
+        )?;
+        Ok(Decoder { literal, distance })
     }
 }
 
