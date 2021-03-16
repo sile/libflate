@@ -69,6 +69,8 @@ impl From<lz77::CompressionLevel> for CompressionLevel {
 
 /// LZ77 Window sizes defined by the ZLIB format.
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+// TODO: Use `#[allow(clippy::upper_case_acronyms)]` instead once it gets available on the stable branch
+#[allow(clippy::all)]
 pub enum Lz77WindowSize {
     /// 256 bytes
     B256 = 0,
@@ -171,6 +173,31 @@ impl Lz77WindowSize {
     }
 }
 
+/// [zlib] library specific parameter for defining behavior when `Write::flush` method is called.
+///
+/// # References
+///
+/// - [Zlib Manual](https://www.zlib.net/manual.html)
+/// - [Zlib Flush Modes](https://www.bolet.org/~pornin/deflate-flush.html)
+///
+/// [zlib]: https://www.zlib.net/
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum FlushMode {
+    /// `Z_NO_FLUSH` (default).
+    ///
+    /// Note that when this parameter is specified,
+    /// no `zlib` specific processing will not be executed but ordinal DEFLATE layer flushing will be performed.
+    None = 0,
+
+    /// `Z_SYNC_FLUSH`.
+    Sync = 2,
+}
+impl Default for FlushMode {
+    fn default() -> Self {
+        FlushMode::None
+    }
+}
+
 /// ZLIB header.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
@@ -225,7 +252,7 @@ impl Header {
             invalid_data_error!("CINFO above 7 are not allowed: value={}", compression_info)
         })?;
 
-        let dict_flag = (flg & 0b100_000) != 0;
+        let dict_flag = (flg & 0b10_0000) != 0;
         if dict_flag {
             let mut buf = [0; 4];
             reader.read_exact(&mut buf)?;
@@ -384,12 +411,14 @@ where
 {
     header: Header,
     options: deflate::EncodeOptions<E>,
+    flush_mode: FlushMode,
 }
 impl Default for EncodeOptions<lz77::DefaultLz77Encoder> {
     fn default() -> Self {
         EncodeOptions {
             header: Header::from_lz77(&lz77::DefaultLz77Encoder::new()),
             options: Default::default(),
+            flush_mode: FlushMode::None,
         }
     }
 }
@@ -425,6 +454,7 @@ where
         EncodeOptions {
             header: Header::from_lz77(&lz77),
             options: deflate::EncodeOptions::with_lz77(lz77),
+            flush_mode: FlushMode::None,
         }
     }
 
@@ -473,12 +503,19 @@ where
         self.options = self.options.fixed_huffman_codes();
         self
     }
+
+    /// Specifies flush mode.
+    pub fn flush_mode(mut self, mode: FlushMode) -> Self {
+        self.flush_mode = mode;
+        self
+    }
 }
 
 /// ZLIB encoder.
 #[derive(Debug)]
 pub struct Encoder<W, E = lz77::DefaultLz77Encoder> {
     header: Header,
+    flush_mode: FlushMode,
     writer: deflate::Encoder<W, E>,
     adler32: checksum::Adler32,
 }
@@ -532,6 +569,7 @@ where
         options.header.write_to(&mut inner)?;
         Ok(Encoder {
             header: options.header,
+            flush_mode: options.flush_mode,
             writer: deflate::Encoder::with_options(inner, options.options),
             adler32: checksum::Adler32::new(),
         })
@@ -617,7 +655,10 @@ where
         Ok(written_size)
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
+        match self.flush_mode {
+            FlushMode::None => self.writer.flush(),
+            FlushMode::Sync => self.writer.zlib_sync_flush(),
+        }
     }
 }
 impl<W, E> Complete for Encoder<W, E>
@@ -634,7 +675,7 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
-    use std::io;
+    use std::io::{self, Read as _, Write as _};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -767,6 +808,71 @@ mod tests {
         assert_eq!(
             decode_all(&encoded[..]).err().map(|e| e.to_string()),
             Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_issues_27() {
+        // See: https://github.com/sile/libflate/issues/27
+
+        let writes = ["fooooooooooooooooo", "bar", "baz"];
+
+        // FlushMode::None
+        let mut encoder = Encoder::new(Vec::new()).unwrap();
+        for _ in 0..2 {
+            for string in &writes {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
+        }
+        let finished = encoder.finish().unwrap();
+        let expected = vec![
+            120, 156, // header
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162,
+            227, 2, 14, 141, 0, 0, 0, 8, 0, 206, 74, 80, 221, 137, 166, 215, 189, 252, 136, 16, 93,
+            1, 112, 32, 0, 0, 0, 0, 0, 228, 255, 26, 246, 95, 20, 111,
+        ];
+        assert_eq!(finished.0, expected);
+
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .unwrap()
+            .read_to_end(&mut output)
+            .unwrap();
+        assert_eq!(
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
+        );
+
+        // FlushMode::Sync
+        let mut encoder =
+            Encoder::with_options(Vec::new(), EncodeOptions::new().flush_mode(FlushMode::Sync))
+                .unwrap();
+        for _ in 0..2 {
+            for string in &writes {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
+        }
+        let finished = encoder.finish().unwrap();
+        let expected = vec![
+            120, 156, // header
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162, 3,
+            0, 0, 255, 255, // sync bytes
+            92, 192, 161, 17, 0, 0, 0, 1, 192, 89, 9, 170, 59, 209, 244, 186, 151, 31, 17, 162, 3,
+            0, 0, 255, 255, // sync bytes
+            5, 192, 129, 0, 0, 0, 0, 0, 144, 255, 107, 0, 246, 95, 20, 111,
+        ];
+        assert_eq!(finished.0, expected);
+
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .unwrap()
+            .read_to_end(&mut output)
+            .unwrap();
+        assert_eq!(
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
         );
     }
 }

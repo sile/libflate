@@ -220,6 +220,17 @@ where
     pub fn into_inner(self) -> W {
         self.writer.into_inner()
     }
+
+    pub(crate) fn zlib_sync_flush(&mut self) -> io::Result<()> {
+        self.block.flush(&mut self.writer, false)?;
+
+        self.writer.write_bit(false)?;
+        self.writer.write_bits(2, BlockType::Raw as u16)?;
+        self.writer.flush()?;
+        self.writer.as_inner_mut().write_all(&[0, 0, 255, 255])?;
+
+        self.writer.as_inner_mut().flush()
+    }
 }
 impl<W, E> io::Write for Encoder<W, E>
 where
@@ -231,6 +242,7 @@ where
         Ok(buf.len())
     }
     fn flush(&mut self) -> io::Result<()> {
+        self.block.flush(&mut self.writer, false)?;
         self.writer.as_inner_mut().flush()
     }
 }
@@ -267,19 +279,24 @@ where
     {
         self.block_buf.append(buf);
         while self.block_buf.len() >= self.block_size {
-            writer.write_bit(false)?;
-            writer.write_bits(2, self.block_type as u16)?;
-            self.block_buf.flush(writer)?;
+            self.flush(writer, false)?;
         }
+        Ok(())
+    }
+    fn flush<W>(&mut self, writer: &mut bit::BitWriter<W>, is_final: bool) -> io::Result<()>
+    where
+        W: io::Write,
+    {
+        writer.write_bit(is_final)?;
+        writer.write_bits(2, self.block_type as u16)?;
+        self.block_buf.flush(writer)?;
         Ok(())
     }
     fn finish<W>(mut self, writer: &mut bit::BitWriter<W>) -> io::Result<()>
     where
         W: io::Write,
     {
-        writer.write_bit(true)?;
-        writer.write_bits(2, self.block_type as u16)?;
-        self.block_buf.flush(writer)?;
+        self.flush(writer, true)?;
         writer.flush()?;
         Ok(())
     }
@@ -409,8 +426,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::super::Decoder;
     use super::*;
-    use std::io::Write;
+    use std::io::{Read as _, Write as _};
 
     #[test]
     fn test_issues_52() {
@@ -435,5 +453,31 @@ mod tests {
         let compressed: Vec<u8> = encoder.finish().into_result().unwrap();
 
         assert!(LIMIT_2 > compressed.len());
+    }
+
+    #[test]
+    fn test_issue_27() {
+        // See: https://github.com/sile/libflate/issues/27
+
+        let writes = ["fooooooooooooooooo", "bar", "baz"];
+
+        let mut encoder = Encoder::new(Vec::new());
+        for _ in 0..2 {
+            for string in &writes {
+                encoder.write(string.as_bytes()).expect("Write failed");
+            }
+            encoder.flush().expect("Flush failed");
+        }
+        let finished = encoder.finish().unwrap();
+        println!("{:?}", finished.0);
+
+        let mut output = Vec::new();
+        Decoder::new(&finished.0[..])
+            .read_to_end(&mut output)
+            .unwrap();
+        assert_eq!(
+            output,
+            "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
+        );
     }
 }

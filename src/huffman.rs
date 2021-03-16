@@ -259,7 +259,7 @@ mod ordinary_huffman_codes {
         let mut heap = BinaryHeap::new();
         for &freq in frequencies.iter().filter(|&&f| f > 0) {
             let weight = -(freq as isize);
-            heap.push((weight, 0 as u8));
+            heap.push((weight, 0_u8));
         }
         while heap.len() > 1 {
             let (weight1, width1) = heap.pop().unwrap();
