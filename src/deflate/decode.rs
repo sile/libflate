@@ -1,14 +1,10 @@
-use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
+use super::symbol;
+use crate::bit;
+use crate::lz77;
+use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
-use std::ptr;
-
-use super::symbol;
-use bit;
-use lz77;
-use util;
 
 /// DEFLATE decoder.
 #[derive(Debug)]
@@ -72,10 +68,20 @@ where
         self.bit_reader.into_inner()
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.bit_reader.reset();
+        self.buffer.clear();
+        self.offset = 0;
+        self.eos = false
+    }
+
     fn read_non_compressed_block(&mut self) -> io::Result<()> {
         self.bit_reader.reset();
-        let len = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
-        let nlen = self.bit_reader.as_inner_mut().read_u16::<LittleEndian>()?;
+        let mut buf = [0; 2];
+        self.bit_reader.as_inner_mut().read_exact(&mut buf)?;
+        let len = u16::from_le_bytes(buf);
+        self.bit_reader.as_inner_mut().read_exact(&mut buf)?;
+        let nlen = u16::from_le_bytes(buf);
         if !len != nlen {
             Err(invalid_data_error!(
                 "LEN={} is not the one's complement of NLEN={}",
@@ -83,13 +89,23 @@ where
                 nlen
             ))
         } else {
-            let old_len = self.buffer.len();
-            self.buffer.reserve(len as usize);
-            unsafe { self.buffer.set_len(old_len + len as usize) };
             self.bit_reader
                 .as_inner_mut()
-                .read_exact(&mut self.buffer[old_len..])?;
-            Ok(())
+                .take(len.into())
+                .read_to_end(&mut self.buffer)
+                .and_then(|used| {
+                    if used != len.into() {
+                        Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            format!(
+                                "The reader has incorrect length: expected {}, read {}",
+                                len, used
+                            ),
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                })
         }
     }
     fn read_compressed_block<H>(&mut self, huffman: &H) -> io::Result<()>
@@ -112,19 +128,7 @@ where
                             distance
                         ));
                     }
-                    let old_len = self.buffer.len();
-                    self.buffer.reserve(length as usize);
-                    unsafe {
-                        self.buffer.set_len(old_len + length as usize);
-                        let start = old_len - distance as usize;
-                        let ptr = self.buffer.as_mut_ptr();
-                        util::ptr_copy(
-                            ptr.add(start),
-                            ptr.add(old_len),
-                            length as usize,
-                            length > distance,
-                        );
-                    }
+                    rle_decode(&mut self.buffer, usize::from(distance), usize::from(length));
                 }
                 symbol::Symbol::EndOfBlock => {
                     break;
@@ -135,11 +139,12 @@ where
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
             let new_len = lz77::MAX_DISTANCE as usize;
-            unsafe {
-                let ptr = self.buffer.as_mut_ptr();
-                let src = ptr.add(self.buffer.len() - new_len);
-                ptr::copy_nonoverlapping(src, ptr, new_len);
+            {
+                // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
             }
             self.buffer.truncate(new_len);
             self.offset = new_len;
@@ -186,9 +191,9 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
+    use crate::deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
     use std::io;
 
     #[test]
@@ -202,7 +207,7 @@ mod test {
             254, 27, 249, 75, 234, 124, 71, 116, 56, 71, 68, 212, 204, 121, 115, 64, 222, 160, 203,
             119, 142, 170, 169, 138, 202, 112, 228, 140, 38,
         ];
-        let mut bit_reader = ::bit::BitReader::new(&input[..]);
+        let mut bit_reader = crate::bit::BitReader::new(&input[..]);
         assert_eq!(bit_reader.read_bit().unwrap(), false); // not final block
         assert_eq!(bit_reader.read_bits(2).unwrap(), 0b10); // DynamicHuffmanCodec
         DynamicHuffmanCodec.load(&mut bit_reader).unwrap();

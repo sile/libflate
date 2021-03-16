@@ -1,13 +1,10 @@
-use byteorder::LittleEndian;
-use byteorder::WriteBytesExt;
-use std::cmp;
-use std::io;
-
 use super::symbol;
 use super::BlockType;
-use bit;
-use finish::{Complete, Finish};
-use lz77;
+use crate::bit;
+use crate::finish::{Complete, Finish};
+use crate::lz77;
+use std::cmp;
+use std::io;
 
 /// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
@@ -374,10 +371,10 @@ impl RawBuf {
         writer.flush()?;
         writer
             .as_inner_mut()
-            .write_u16::<LittleEndian>(size as u16)?;
+            .write_all(&(size as u16).to_le_bytes())?;
         writer
             .as_inner_mut()
-            .write_u16::<LittleEndian>(!size as u16)?;
+            .write_all(&(!size as u16).to_le_bytes())?;
         writer.as_inner_mut().write_all(&self.buf[..size])?;
         self.buf.drain(0..size);
         Ok(())
@@ -427,19 +424,34 @@ where
     }
 }
 
-impl lz77::Sink for Vec<symbol::Symbol> {
-    fn consume(&mut self, code: lz77::Code) {
-        let symbol = match code {
-            lz77::Code::Literal(b) => symbol::Symbol::Literal(b),
-            lz77::Code::Pointer {
-                length,
-                backward_distance,
-            } => symbol::Symbol::Share {
-                length,
-                distance: backward_distance,
-            },
-        };
-        self.push(symbol);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_issues_52() {
+        // see: https://github.com/sile/libflate/issues/52
+        let input = crate::deflate::test_data::ISSUE_52_INPUT;
+
+        const LIMIT_1: usize = 16_031;
+        const LIMIT_2: usize = LIMIT_1 + 1;
+
+        // Attempt 1 (should succeed)
+        //
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&input[0..LIMIT_1]).unwrap();
+        let compressed: Vec<u8> = encoder.finish().into_result().unwrap();
+
+        assert!(LIMIT_1 > compressed.len());
+
+        // Attempt 2 (will fail without patch)
+        //
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&input[0..LIMIT_2]).unwrap();
+        let compressed: Vec<u8> = encoder.finish().into_result().unwrap();
+
+        assert!(LIMIT_2 > compressed.len());
     }
 }
 

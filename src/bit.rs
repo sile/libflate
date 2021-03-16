@@ -1,6 +1,3 @@
-use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
 use std::io;
 
 #[derive(Debug)]
@@ -34,7 +31,7 @@ where
     }
     pub fn flush(&mut self) -> io::Result<()> {
         while self.end > 0 {
-            self.inner.write_u8(self.buf as u8)?;
+            self.inner.write_all(&[self.buf as u8])?;
             self.buf >>= 8;
             self.end = self.end.saturating_sub(8);
         }
@@ -44,7 +41,7 @@ where
     #[inline(always)]
     fn flush_if_needed(&mut self) -> io::Result<()> {
         if self.end >= 16 {
-            self.inner.write_u16::<LittleEndian>(self.buf as u16)?;
+            self.inner.write_all(&(self.buf as u16).to_le_bytes())?;
             self.end -= 16;
             self.buf >>= 16;
         }
@@ -82,6 +79,7 @@ where
             last_error: None,
         }
     }
+
     #[inline(always)]
     pub fn set_last_error(&mut self, e: io::Error) {
         self.last_error = Some(e);
@@ -135,7 +133,9 @@ where
         self.offset -= 8;
         self.last_read >>= 8;
 
-        let next = u32::from(self.inner.read_u8()?);
+        let mut buf = [0; 1];
+        self.inner.read_exact(&mut buf)?;
+        let next = u32::from(buf[0]);
         self.last_read |= next << (32 - 8);
         Ok(())
     }
@@ -174,7 +174,7 @@ pub(crate) struct BitReaderState {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use std::io;
 

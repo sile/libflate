@@ -19,18 +19,11 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
-use byteorder::WriteBytesExt;
-use std::ffi::CString;
-use std::io;
-use std::mem;
-use std::time;
-
-use checksum;
-use deflate;
-use finish::{Complete, Finish};
-use lz77;
+use crate::checksum;
+use crate::deflate;
+use crate::finish::{Complete, Finish};
+use crate::lz77;
+use std::{ffi::CString, io, time};
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -108,17 +101,19 @@ impl Trailer {
     where
         R: io::Read,
     {
-        Ok(Trailer {
-            crc32: reader.read_u32::<LittleEndian>()?,
-            input_size: reader.read_u32::<LittleEndian>()?,
-        })
+        let mut buf = [0; 4];
+        reader.read_exact(&mut buf)?;
+        let crc32 = u32::from_le_bytes(buf);
+        reader.read_exact(&mut buf)?;
+        let input_size = u32::from_le_bytes(buf);
+        Ok(Trailer { crc32, input_size })
     }
     fn write_to<W>(&self, mut writer: W) -> io::Result<()>
     where
         W: io::Write,
     {
-        writer.write_u32::<LittleEndian>(self.crc32)?;
-        writer.write_u32::<LittleEndian>(self.input_size)?;
+        writer.write_all(&self.crc32.to_le_bytes())?;
+        writer.write_all(&self.input_size.to_le_bytes())?;
         Ok(())
     }
 }
@@ -362,11 +357,9 @@ impl Header {
         W: io::Write,
     {
         writer.write_all(&GZIP_ID)?;
-        writer.write_u8(COMPRESSION_METHOD_DEFLATE)?;
-        writer.write_u8(self.flags())?;
-        writer.write_u32::<LittleEndian>(self.modification_time)?;
-        writer.write_u8(self.compression_level.to_u8())?;
-        writer.write_u8(self.os.to_u8())?;
+        writer.write_all(&[COMPRESSION_METHOD_DEFLATE, self.flags()])?;
+        writer.write_all(&self.modification_time.to_le_bytes())?;
+        writer.write_all(&[self.compression_level.to_u8(), self.os.to_u8()])?;
         if let Some(ref x) = self.extra_field {
             x.write_to(&mut writer)?;
         }
@@ -377,7 +370,7 @@ impl Header {
             writer.write_all(x.as_bytes_with_nul())?;
         }
         if self.is_verified {
-            writer.write_u16::<LittleEndian>(self.crc16())?;
+            writer.write_all(&self.crc16().to_le_bytes())?;
         }
         Ok(())
     }
@@ -386,8 +379,9 @@ impl Header {
         R: io::Read,
     {
         let mut this = HeaderBuilder::new().finish();
-        let mut id = [0; 2];
-        reader.read_exact(&mut id)?;
+        let mut buf = [0; 2 + 1 + 1 + 4 + 1 + 1];
+        reader.read_exact(&mut buf)?;
+        let id = &buf[0..2];
         if id != GZIP_ID {
             return Err(invalid_data_error!(
                 "Unexpected GZIP ID: value={:?}, \
@@ -396,7 +390,7 @@ impl Header {
                 GZIP_ID
             ));
         }
-        let compression_method = reader.read_u8()?;
+        let compression_method = buf[2];
         if compression_method != COMPRESSION_METHOD_DEFLATE {
             return Err(invalid_data_error!(
                 "Compression methods other than DEFLATE(8) are \
@@ -404,10 +398,10 @@ impl Header {
                 compression_method
             ));
         }
-        let flags = reader.read_u8()?;
-        this.modification_time = reader.read_u32::<LittleEndian>()?;
-        this.compression_level = CompressionLevel::from_u8(reader.read_u8()?);
-        this.os = Os::from_u8(reader.read_u8()?);
+        let flags = buf[3];
+        this.modification_time = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
+        this.compression_level = CompressionLevel::from_u8(buf[8]);
+        this.os = Os::from_u8(buf[9]);
         if flags & F_EXTRA != 0 {
             this.extra_field = Some(ExtraField::read_from(&mut reader)?);
         }
@@ -421,7 +415,9 @@ impl Header {
         // so that random data from fuzzer can reach actually interesting code.
         // Compilation flag 'fuzzing' is automatically set by all 3 Rust fuzzers.
         if flags & F_HCRC != 0 && cfg!(not(fuzzing)) {
-            let crc = reader.read_u16::<LittleEndian>()?;
+            let mut buf = [0; 2];
+            reader.read_exact(&mut buf)?;
+            let crc = u16::from_le_bytes(buf);
             let expected = this.crc16();
             if crc != expected {
                 return Err(invalid_data_error!(
@@ -443,11 +439,12 @@ where
 {
     let mut buf = Vec::new();
     loop {
-        let b = reader.read_u8()?;
-        if b == 0 {
+        let mut cbuf = [0; 1];
+        reader.read_exact(&mut cbuf)?;
+        if cbuf[0] == 0 {
             return Ok(unsafe { CString::from_vec_unchecked(buf) });
         }
-        buf.push(b);
+        buf.push(cbuf[0]);
     }
 }
 
@@ -463,7 +460,9 @@ impl ExtraField {
         R: io::Read,
     {
         let mut subfields = Vec::new();
-        let data_size = reader.read_u16::<LittleEndian>()? as usize;
+        let mut buf = [0; 2];
+        reader.read_exact(&mut buf)?;
+        let data_size = u16::from_le_bytes(buf) as usize;
         let mut reader = reader.take(data_size as u64);
         while reader.limit() > 0 {
             subfields.push(ExtraSubField::read_from(&mut reader)?);
@@ -478,7 +477,7 @@ impl ExtraField {
         if len > 0xFFFF {
             return Err(invalid_data_error!("extra field too long: {}", len));
         }
-        writer.write_u16::<LittleEndian>(len as u16)?;
+        writer.write_all(&(len as u16).to_le_bytes())?;
         for f in &self.subfields {
             f.write_to(&mut writer)?;
         }
@@ -506,7 +505,9 @@ impl ExtraSubField {
         };
 
         reader.read_exact(&mut field.id)?;
-        let data_size = reader.read_u16::<LittleEndian>()? as usize;
+        let mut buf = [0; 2];
+        reader.read_exact(&mut buf)?;
+        let data_size = u16::from_le_bytes(buf) as usize;
         field.data.resize(data_size, 0);
         reader.read_exact(&mut field.data)?;
 
@@ -517,7 +518,7 @@ impl ExtraSubField {
         W: io::Write,
     {
         writer.write_all(&self.id)?;
-        writer.write_u16::<LittleEndian>(self.data.len() as u16)?;
+        writer.write_all(&(self.data.len() as u16).to_le_bytes())?;
         writer.write_all(&self.data)?;
         Ok(())
     }
@@ -979,6 +980,13 @@ where
             eos: false,
         }
     }
+
+    fn reset(&mut self, header: Header) {
+        self.header = header;
+        self.reader.reset();
+        self.crc32 = checksum::Crc32::new();
+        self.eos = false;
+    }
 }
 impl<R> io::Read for Decoder<R>
 where
@@ -1015,8 +1023,8 @@ where
 /// A decoder that decodes all members in a GZIP stream.
 #[derive(Debug)]
 pub struct MultiDecoder<R> {
-    header: Header,
-    decoder: Result<Decoder<R>, R>,
+    decoder: Decoder<R>,
+    eos: bool,
 }
 impl<R> MultiDecoder<R>
 where
@@ -1050,8 +1058,8 @@ where
     pub fn new(inner: R) -> io::Result<Self> {
         let decoder = Decoder::new(inner)?;
         Ok(MultiDecoder {
-            header: decoder.header().clone(),
-            decoder: Ok(decoder),
+            decoder,
+            eos: false,
         })
     }
 
@@ -1069,23 +1077,17 @@ where
     /// assert_eq!(decoder.header().os(), Os::Unix);
     /// ```
     pub fn header(&self) -> &Header {
-        &self.header
+        self.decoder.header()
     }
 
     /// Returns the immutable reference to the inner stream.
     pub fn as_inner_ref(&self) -> &R {
-        match self.decoder {
-            Err(ref reader) => reader,
-            Ok(ref decoder) => decoder.as_inner_ref(),
-        }
+        self.decoder.as_inner_ref()
     }
 
     /// Returns the mutable reference to the inner stream.
     pub fn as_inner_mut(&mut self) -> &mut R {
-        match self.decoder {
-            Err(ref mut reader) => reader,
-            Ok(ref mut decoder) => decoder.as_inner_mut(),
-        }
+        self.decoder.as_inner_mut()
     }
 
     /// Unwraps this `MultiDecoder`, returning the underlying reader.
@@ -1103,10 +1105,7 @@ where
     /// assert_eq!(decoder.into_inner().into_inner(), &encoded_data[..]);
     /// ```
     pub fn into_inner(self) -> R {
-        match self.decoder {
-            Err(reader) => reader,
-            Ok(decoder) => decoder.into_inner(),
-        }
+        self.decoder.into_inner()
     }
 }
 impl<R> io::Read for MultiDecoder<R>
@@ -1114,31 +1113,23 @@ where
     R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let read_size = match self.decoder {
-            Err(_) => return Ok(0),
-            Ok(ref mut decoder) => decoder.read(buf)?,
-        };
+        if self.eos {
+            return Ok(0);
+        }
+
+        let read_size = self.decoder.read(buf)?;
         if read_size == 0 {
-            let mut reader = mem::replace(&mut self.decoder, Err(unsafe { mem::uninitialized() }))
-                .ok()
-                .take()
-                .expect("Never fails")
-                .into_inner();
-            match Header::read_from(&mut reader) {
+            match Header::read_from(self.as_inner_mut()) {
                 Err(e) => {
-                    mem::forget(mem::replace(&mut self.decoder, Err(reader)));
                     if e.kind() == io::ErrorKind::UnexpectedEof {
+                        self.eos = true;
                         Ok(0)
                     } else {
                         Err(e)
                     }
                 }
                 Ok(header) => {
-                    self.header = header.clone();
-                    mem::forget(mem::replace(
-                        &mut self.decoder,
-                        Ok(Decoder::with_header(reader, header)),
-                    ));
+                    self.decoder.reset(header);
                     self.read(buf)
                 }
             }
@@ -1149,9 +1140,9 @@ where
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use finish::AutoFinish;
+    use crate::finish::AutoFinish;
     use std::io::{self, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {

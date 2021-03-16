@@ -28,6 +28,9 @@ mod decode;
 mod encode;
 pub(crate) mod symbol;
 
+#[cfg(test)]
+pub(crate) mod test_data;
+
 #[derive(Debug, Clone, Copy)]
 enum BlockType {
     Raw = 0b00,
@@ -36,11 +39,10 @@ enum BlockType {
 }
 
 #[cfg(test)]
-mod test {
-    use std::io::{Read, Write};
-
+mod tests {
     use super::*;
-    use lz77;
+    use crate::lz77;
+    use std::io::{Read, Write};
 
     #[test]
     fn encode_and_decode_works() {

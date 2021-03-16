@@ -1,9 +1,7 @@
+//! Length-limited Huffman Codes.
+use crate::bit;
 use std::cmp;
-/// Length-limited Huffman Codes
-///
 use std::io;
-
-use bit;
 
 const MAX_BITWIDTH: u8 = 15;
 
@@ -59,22 +57,37 @@ pub trait Builder: Sized {
 pub struct DecoderBuilder {
     table: Vec<u16>,
     eob_symbol: Option<u16>,
-    eob_bitwidth: u8,
+    safely_peek_bitwidth: Option<u8>,
     max_bitwidth: u8,
 }
 impl DecoderBuilder {
-    pub fn new(max_bitwidth: u8, eob_symbol: Option<u16>) -> Self {
+    pub fn new(
+        max_bitwidth: u8,
+        safely_peek_bitwidth: Option<u8>,
+        eob_symbol: Option<u16>,
+    ) -> Self {
         debug_assert!(max_bitwidth <= MAX_BITWIDTH);
         DecoderBuilder {
             table: vec![u16::from(MAX_BITWIDTH) + 1; 1 << max_bitwidth],
             eob_symbol,
-            eob_bitwidth: max_bitwidth,
+            safely_peek_bitwidth,
             max_bitwidth,
         }
     }
-    pub fn from_bitwidthes(bitwidthes: &[u8], eob_symbol: Option<u16>) -> io::Result<Decoder> {
-        let builder = Self::new(bitwidthes.iter().cloned().max().unwrap_or(0), eob_symbol);
+    pub fn from_bitwidthes(
+        bitwidthes: &[u8],
+        safely_peek_bitwidth: Option<u8>,
+        eob_symbol: Option<u16>,
+    ) -> io::Result<Decoder> {
+        let builder = Self::new(
+            bitwidthes.iter().cloned().max().unwrap_or(0),
+            safely_peek_bitwidth,
+            eob_symbol,
+        );
         builder.restore_canonical_huffman_codes(bitwidthes)
+    }
+    pub fn safely_peek_bitwidth(&self) -> Option<u8> {
+        self.safely_peek_bitwidth
     }
 }
 impl Builder for DecoderBuilder {
@@ -82,7 +95,7 @@ impl Builder for DecoderBuilder {
     fn set_mapping(&mut self, symbol: u16, code: Code) -> io::Result<()> {
         debug_assert!(code.width <= self.max_bitwidth);
         if Some(symbol) == self.eob_symbol {
-            self.eob_bitwidth = code.width;
+            self.safely_peek_bitwidth = Some(code.width);
         }
 
         // `bitwidth` encoded `to` value
@@ -99,16 +112,17 @@ impl Builder for DecoderBuilder {
                 );
                 return Err(io::Error::new(io::ErrorKind::InvalidData, message));
             }
-            unsafe {
-                *self.table.get_unchecked_mut(i) = value;
-            }
+            self.table[i] = value;
         }
         Ok(())
     }
     fn finish(self) -> Self::Instance {
         Decoder {
             table: self.table,
-            eob_bitwidth: self.eob_bitwidth,
+            safely_peek_bitwidth: std::cmp::min(
+                self.max_bitwidth,
+                self.safely_peek_bitwidth.expect("bug"),
+            ),
             max_bitwidth: self.max_bitwidth,
         }
     }
@@ -117,10 +131,14 @@ impl Builder for DecoderBuilder {
 #[derive(Debug)]
 pub struct Decoder {
     table: Vec<u16>,
-    eob_bitwidth: u8,
+    safely_peek_bitwidth: u8,
     max_bitwidth: u8,
 }
 impl Decoder {
+    pub fn safely_peek_bitwidth(&self) -> u8 {
+        self.safely_peek_bitwidth
+    }
+
     #[inline(always)]
     pub fn decode<R>(&self, reader: &mut bit::BitReader<R>) -> io::Result<u16>
     where
@@ -136,16 +154,21 @@ impl Decoder {
     where
         R: io::Read,
     {
-        let code = reader.peek_bits_unchecked(self.eob_bitwidth);
-        let mut value = unsafe { *self.table.get_unchecked(code as usize) };
-        let mut bitwidth = (value & 0b1_1111) as u8;
-        if bitwidth > self.eob_bitwidth {
-            let code = reader.peek_bits_unchecked(self.max_bitwidth);
-            value = unsafe { *self.table.get_unchecked(code as usize) };
+        let mut value;
+        let mut bitwidth;
+        let mut peek_bitwidth = self.safely_peek_bitwidth;
+        loop {
+            let code = reader.peek_bits_unchecked(peek_bitwidth);
+            value = self.table[code as usize];
             bitwidth = (value & 0b1_1111) as u8;
+            if bitwidth <= peek_bitwidth {
+                break;
+            }
             if bitwidth > self.max_bitwidth {
                 reader.set_last_error(invalid_data_error!("Invalid huffman coded stream"));
+                break;
             }
+            peek_bitwidth = bitwidth;
         }
         reader.skip_bits(bitwidth as u8);
         value >> 5
@@ -216,7 +239,7 @@ impl Encoder {
             symbol,
             self.table.len()
         );
-        unsafe { self.table.get_unchecked(symbol as usize) }.clone()
+        self.table[symbol as usize].clone()
     }
     pub fn used_max_symbol(&self) -> Option<u16> {
         self.table
@@ -336,7 +359,7 @@ mod length_limited_huffman_codes {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn it_works() {}
 }

@@ -9,8 +9,10 @@ use super::Sink;
 #[derive(Debug)]
 pub struct DefaultLz77Encoder {
     window_size: u16,
+    max_length: u16,
     buf: Vec<u8>,
 }
+
 impl DefaultLz77Encoder {
     /// Makes a new encoder instance.
     ///
@@ -26,7 +28,7 @@ impl DefaultLz77Encoder {
     /// let _deflate = deflate::Encoder::with_options(Vec::new(), options);
     /// ```
     pub fn new() -> Self {
-        Self::with_window_size(super::MAX_WINDOW_SIZE)
+        DefaultLz77EncoderBuilder::new().build()
     }
 
     /// Makes a new encoder instance with specified window size.
@@ -46,17 +48,18 @@ impl DefaultLz77Encoder {
     /// let _deflate = deflate::Encoder::with_options(Vec::new(), options);
     /// ```
     pub fn with_window_size(size: u16) -> Self {
-        DefaultLz77Encoder {
-            window_size: cmp::min(size, super::MAX_WINDOW_SIZE),
-            buf: Vec::new(),
-        }
+        DefaultLz77EncoderBuilder::new()
+            .window_size(cmp::min(size, super::MAX_WINDOW_SIZE))
+            .build()
     }
 }
+
 impl Default for DefaultLz77Encoder {
     fn default() -> Self {
         Self::new()
     }
 }
+
 impl Lz77Encode for DefaultLz77Encoder {
     fn encode<S>(&mut self, buf: &[u8], sink: S)
     where
@@ -80,7 +83,12 @@ impl Lz77Encode for DefaultLz77Encoder {
             if let Some(j) = matched.map(|j| j as usize) {
                 let distance = i - j;
                 if distance <= self.window_size as usize {
-                    let length = 3 + longest_common_prefix(&self.buf, i + 3, j + 3);
+                    let length = 3 + longest_common_prefix(
+                        &self.buf,
+                        i + 3,
+                        j + 3,
+                        self.max_length as usize,
+                    );
                     sink.consume(Code::Pointer {
                         length,
                         backward_distance: distance as u16,
@@ -109,21 +117,16 @@ impl Lz77Encode for DefaultLz77Encoder {
 }
 
 #[inline]
-fn prefix(buf: &[u8]) -> [u8; 3] {
-    unsafe {
-        [
-            *buf.get_unchecked(0),
-            *buf.get_unchecked(1),
-            *buf.get_unchecked(2),
-        ]
-    }
+fn prefix(input_buf: &[u8]) -> [u8; 3] {
+    let buf: &[u8] = &input_buf[..3]; // perform bounds check once
+    [buf[0], buf[1], buf[2]]
 }
 
 #[inline]
-fn longest_common_prefix(buf: &[u8], i: usize, j: usize) -> u16 {
+fn longest_common_prefix(buf: &[u8], i: usize, j: usize, max: usize) -> u16 {
     buf[i..]
         .iter()
-        .take(super::MAX_LENGTH as usize - 3)
+        .take(max - 3)
         .zip(&buf[j..])
         .take_while(|&(x, y)| x == y)
         .count() as u16
@@ -170,7 +173,7 @@ impl LargePrefixTable {
         let p2 = prefix[2];
 
         let i = (p0 << 8) + p1;
-        let positions = unsafe { self.table.get_unchecked_mut(i) };
+        let positions = &mut self.table[i];
         for &mut (key, ref mut value) in positions.iter_mut() {
             if key == p2 {
                 let old = *value;
@@ -183,27 +186,74 @@ impl LargePrefixTable {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use deflate::symbol::Symbol;
+/// Type for constructing instances of `DefaultLz77Encoder`.
+///
+/// # Examples
+/// ```
+/// use libflate_lz77::{
+///     DefaultLz77EncoderBuilder,
+///     MAX_LENGTH,
+///     MAX_WINDOW_SIZE,
+/// };
+///
+/// // Produce an encoder explicitly with the default window size and max copy length
+/// let _encoder = DefaultLz77EncoderBuilder::new()
+///     .window_size(MAX_WINDOW_SIZE)
+///     .max_length(MAX_LENGTH)
+///     .build();
+/// ```
+#[derive(Debug)]
+pub struct DefaultLz77EncoderBuilder {
+    window_size: u16,
+    max_length: u16,
+}
 
-    #[test]
-    // See: https://github.com/sile/libflate/issues/21
-    fn issue21() {
-        let mut enc = DefaultLz77Encoder::new();
-        let mut sink = Vec::new();
-        enc.encode(b"aaaaa", &mut sink);
-        enc.flush(&mut sink);
-        assert_eq!(
-            sink,
-            vec![
-                Symbol::Literal(97),
-                Symbol::Share {
-                    length: 4,
-                    distance: 1
-                }
-            ]
-        );
+impl DefaultLz77EncoderBuilder {
+    /// Create a builder with the default parameters for the encoder.
+    pub fn new() -> Self {
+        DefaultLz77EncoderBuilder {
+            window_size: super::MAX_WINDOW_SIZE,
+            max_length: super::MAX_LENGTH,
+        }
+    }
+
+    /// Set the size of the sliding search window used during compression.
+    ///
+    /// Larger values require more memory. The standard window size may be
+    /// unsuitable for a particular Sink; for example, if the encoding used
+    /// cannot express pointer distances past a certain size, you would want the
+    /// window size to be no greater than the Sink's limit.
+    pub fn window_size(self, window_size: u16) -> Self {
+        DefaultLz77EncoderBuilder {
+            window_size: cmp::min(window_size, super::MAX_WINDOW_SIZE),
+            ..self
+        }
+    }
+
+    /// Set the maximum length of a pointer command this encoder will emit.
+    ///
+    /// Some uses of LZ77 may not be able to encode pointers of the standard
+    /// maximum length of 258 bytes. In this case, you may set your own maximum
+    /// which can be encoded by the Sink.
+    pub fn max_length(self, max_length: u16) -> Self {
+        DefaultLz77EncoderBuilder {
+            max_length: cmp::min(max_length, super::MAX_LENGTH),
+            ..self
+        }
+    }
+
+    /// Build the encoder with the builder state's parameters.
+    pub fn build(self) -> DefaultLz77Encoder {
+        DefaultLz77Encoder {
+            window_size: self.window_size,
+            max_length: self.max_length,
+            buf: Vec::new(),
+        }
+    }
+}
+
+impl Default for DefaultLz77EncoderBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }

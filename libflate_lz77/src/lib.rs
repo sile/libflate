@@ -1,7 +1,7 @@
 //! The interface and implementations of LZ77 compression algorithm.
 //!
 //! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
-pub use self::default::DefaultLz77Encoder;
+pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
 
 mod default;
 
@@ -59,6 +59,14 @@ where
 {
     fn consume(&mut self, code: Code) {
         (*self).consume(code);
+    }
+}
+impl<T> Sink for Vec<T>
+where
+    T: From<Code>,
+{
+    fn consume(&mut self, code: Code) {
+        self.push(T::from(code));
     }
 }
 

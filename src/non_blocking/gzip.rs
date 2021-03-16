@@ -20,11 +20,10 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
+use crate::checksum;
+use crate::gzip::{Header, Trailer};
+use crate::non_blocking::deflate;
 use std::io::{self, Read};
-
-use checksum;
-use gzip::{Header, Trailer};
-use non_blocking::deflate;
 
 /// GZIP decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -154,11 +153,11 @@ impl<R: Read> Read for Decoder<R> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use gzip::Encoder;
+    use crate::gzip::Encoder;
+    use crate::util::{nb_read_to_end, WouldBlockReader};
     use std::io;
-    use util::{nb_read_to_end, WouldBlockReader};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));
@@ -181,5 +180,4 @@ mod test {
         // decode_all(encoded).unwrap();
         assert_eq!(decode_all(encoded).unwrap(), decoded.to_vec());
     }
-
 }

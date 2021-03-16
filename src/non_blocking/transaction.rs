@@ -1,7 +1,6 @@
+use crate::bit;
 use std::cmp;
 use std::io::{self, Read};
-
-use bit;
 
 #[derive(Debug)]
 pub struct TransactionalBitReader<R> {

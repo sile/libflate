@@ -20,13 +20,10 @@
 //!
 //! assert_eq!(decoded_data, b"Hello World!");
 //! ```
-use byteorder::BigEndian;
-use byteorder::ReadBytesExt;
+use crate::checksum;
+use crate::non_blocking::deflate;
+use crate::zlib::Header;
 use std::io::{self, Read};
-
-use checksum;
-use non_blocking::deflate;
-use zlib::Header;
 
 /// ZLIB decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -128,10 +125,12 @@ impl<R: Read> Read for Decoder<R> {
         } else {
             let read_size = self.reader.read(buf)?;
             if read_size == 0 {
-                let adler32 = self
-                    .reader
-                    .bit_reader_mut()
-                    .transaction(|r| r.as_inner_mut().read_u32::<BigEndian>())?;
+                let adler32 = self.reader.bit_reader_mut().transaction(|r| {
+                    let mut buf = [0; 4];
+                    r.as_inner_mut()
+                        .read_exact(&mut buf)
+                        .and(Ok(u32::from_be_bytes(buf)))
+                })?;
                 self.eos = true;
                 // checksum verification is skipped during fuzzing
                 // so that random data from fuzzer can reach actually interesting code
@@ -154,11 +153,11 @@ impl<R: Read> Read for Decoder<R> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
+    use crate::util::{nb_read_to_end, WouldBlockReader};
+    use crate::zlib::{EncodeOptions, Encoder};
     use std::io;
-    use util::{nb_read_to_end, WouldBlockReader};
-    use zlib::{EncodeOptions, Encoder};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

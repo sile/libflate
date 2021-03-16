@@ -1,5 +1,4 @@
 use adler32::RollingAdler32;
-use crc32fast;
 use std::fmt;
 
 pub struct Adler32(RollingAdler32);
@@ -39,7 +38,7 @@ impl fmt::Debug for Crc32 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

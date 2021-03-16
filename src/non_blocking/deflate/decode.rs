@@ -1,14 +1,10 @@
-use byteorder::LittleEndian;
-use byteorder::ReadBytesExt;
+use crate::deflate::symbol::{self, HuffmanCodec};
+use crate::lz77;
+use crate::non_blocking::transaction::TransactionalBitReader;
+use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
-use std::ptr;
-
-use deflate::symbol::{self, HuffmanCodec};
-use lz77;
-use non_blocking::transaction::TransactionalBitReader;
-use util;
 
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -101,8 +97,11 @@ impl<R: Read> Read for Decoder<R> {
                 DecoderState::ReadNonCompressedBlockLen => {
                     let len = self.bit_reader.transaction(|r| {
                         r.reset();
-                        let len = r.as_inner_mut().read_u16::<LittleEndian>()?;
-                        let nlen = r.as_inner_mut().read_u16::<LittleEndian>()?;
+                        let mut buf = [0; 2];
+                        r.as_inner_mut().read_exact(&mut buf)?;
+                        let len = u16::from_le_bytes(buf);
+                        r.as_inner_mut().read_exact(&mut buf)?;
+                        let nlen = u16::from_le_bytes(buf);
                         if !len != nlen {
                             Err(invalid_data_error!(
                                 "LEN={} is not the one's complement of NLEN={}",
@@ -211,19 +210,7 @@ impl BlockDecoder {
                             distance
                         ));
                     }
-                    let old_len = self.buffer.len();
-                    self.buffer.reserve(length as usize);
-                    unsafe {
-                        self.buffer.set_len(old_len + length as usize);
-                        let start = old_len - distance as usize;
-                        let ptr = self.buffer.as_mut_ptr();
-                        util::ptr_copy(
-                            ptr.add(start),
-                            ptr.add(old_len),
-                            length as usize,
-                            length > distance,
-                        );
-                    }
+                    rle_decode(&mut self.buffer, usize::from(distance), usize::from(length));
                 }
                 symbol::Symbol::EndOfBlock => {
                     self.eob = true;
@@ -235,11 +222,12 @@ impl BlockDecoder {
     }
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
             let new_len = lz77::MAX_DISTANCE as usize;
-            unsafe {
-                let ptr = self.buffer.as_mut_ptr();
-                let src = ptr.add(self.buffer.len() - new_len);
-                ptr::copy_nonoverlapping(src, ptr, new_len);
+            {
+                // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
             }
             self.buffer.truncate(new_len);
             self.offset = new_len;
@@ -283,11 +271,11 @@ impl Read for BlockDecoder {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use deflate::{EncodeOptions, Encoder};
+    use crate::deflate::{EncodeOptions, Encoder};
+    use crate::util::{nb_read_to_end, WouldBlockReader};
     use std::io::{self, Read};
-    use util::{nb_read_to_end, WouldBlockReader};
 
     #[test]
     fn it_works() {
@@ -321,7 +309,7 @@ mod test {
             .map(|i| format!("test {}", i))
             .collect();
 
-        let mut encoder = ::deflate::Encoder::new(Vec::new());
+        let mut encoder = crate::deflate::Encoder::new(Vec::new());
         io::copy(&mut text.as_bytes(), &mut encoder).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 

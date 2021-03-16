@@ -1,11 +1,11 @@
+use crate::bit;
+use crate::huffman;
+use crate::huffman::Builder;
+use crate::lz77;
 use std::cmp;
 use std::io;
 use std::iter;
 use std::ops::Range;
-
-use bit;
-use huffman;
-use huffman::Builder;
 
 const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
     (8, 000..144, 0b0_0011_0000),
@@ -99,12 +99,12 @@ impl Symbol {
             Symbol::Literal(b) => u16::from(b),
             Symbol::EndOfBlock => 256,
             Symbol::Share { length, .. } => match length {
-                3...10 => 257 + length - 3,
-                11...18 => 265 + (length - 11) / 2,
-                19...34 => 269 + (length - 19) / 4,
-                35...66 => 273 + (length - 35) / 8,
-                67...130 => 277 + (length - 67) / 16,
-                131...257 => 281 + (length - 131) / 32,
+                3..=10 => 257 + length - 3,
+                11..=18 => 265 + (length - 11) / 2,
+                19..=34 => 269 + (length - 19) / 4,
+                35..=66 => 273 + (length - 35) / 8,
+                67..=130 => 277 + (length - 67) / 16,
+                131..=257 => 281 + (length - 131) / 32,
                 258 => 285,
                 _ => unreachable!(),
             },
@@ -113,12 +113,12 @@ impl Symbol {
     pub fn extra_lengh(&self) -> Option<(u8, u16)> {
         if let Symbol::Share { length, .. } = *self {
             match length {
-                3...10 | 258 => None,
-                11...18 => Some((1, (length - 11) % 2)),
-                19...34 => Some((2, (length - 19) % 4)),
-                35...66 => Some((3, (length - 35) % 8)),
-                67...130 => Some((4, (length - 67) % 16)),
-                131...257 => Some((5, (length - 131) % 32)),
+                3..=10 | 258 => None,
+                11..=18 => Some((1, (length - 11) % 2)),
+                19..=34 => Some((2, (length - 19) % 4)),
+                35..=66 => Some((3, (length - 35) % 8)),
+                67..=130 => Some((4, (length - 67) % 16)),
+                131..=257 => Some((5, (length - 131) % 32)),
                 _ => unreachable!(),
             }
         } else {
@@ -148,6 +148,20 @@ impl Symbol {
             }
         } else {
             None
+        }
+    }
+}
+impl From<lz77::Code> for Symbol {
+    fn from(code: lz77::Code) -> Self {
+        match code {
+            lz77::Code::Literal(b) => Symbol::Literal(b),
+            lz77::Code::Pointer {
+                length,
+                backward_distance,
+            } => Symbol::Share {
+                length,
+                distance: backward_distance,
+            },
         }
     }
 }
@@ -203,7 +217,7 @@ impl Decoder {
     {
         let decoded = self.literal.decode_unchecked(reader);
         match decoded {
-            0...255 => Symbol::Literal(decoded as u8),
+            0..=255 => Symbol::Literal(decoded as u8),
             256 => Symbol::EndOfBlock,
             286 | 287 => {
                 let message = format!("The value {} must not occur in compressed data", decoded);
@@ -211,8 +225,7 @@ impl Decoder {
                 Symbol::EndOfBlock // dummy value
             }
             length_code => {
-                let (base, extra_bits) =
-                    unsafe { *LENGTH_TABLE.get_unchecked(length_code as usize - 257) };
+                let (base, extra_bits) = LENGTH_TABLE[length_code as usize - 257];
                 let extra = reader.read_bits_unchecked(extra_bits);
                 Symbol::Share {
                     length: base + extra,
@@ -227,7 +240,7 @@ impl Decoder {
         R: io::Read,
     {
         let decoded = self.distance.decode_unchecked(reader) as usize;
-        let (base, extra_bits) = unsafe { *DISTANCE_TABLE.get_unchecked(decoded) };
+        let (base, extra_bits) = DISTANCE_TABLE[decoded];
         let extra = reader.read_bits_unchecked(extra_bits);
         base + extra
     }
@@ -281,7 +294,7 @@ impl HuffmanCodec for FixedHuffmanCodec {
     where
         R: io::Read,
     {
-        let mut literal_builder = huffman::DecoderBuilder::new(9, Some(END_OF_BLOCK));
+        let mut literal_builder = huffman::DecoderBuilder::new(9, None, Some(END_OF_BLOCK));
         for &(bitwidth, ref symbols, code_base) in &FIXED_LITERAL_OR_LENGTH_CODE_TABLE {
             for (code, symbol) in symbols
                 .clone()
@@ -292,7 +305,8 @@ impl HuffmanCodec for FixedHuffmanCodec {
             }
         }
 
-        let mut distance_builder = huffman::DecoderBuilder::new(5, None);
+        let mut distance_builder =
+            huffman::DecoderBuilder::new(5, literal_builder.safely_peek_bitwidth(), None);
         for i in 0..30 {
             distance_builder.set_mapping(i, huffman::Code::new(5, i))?;
         }
@@ -348,7 +362,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             BITWIDTH_CODE_ORDER
                 .iter()
                 .rev()
-                .position(|&i| bitwidth_encoder.lookup(i as u16).width > 0)
+                .position(|&i| code_counts[i] != 0 && bitwidth_encoder.lookup(i as u16).width > 0)
                 .map_or(0, |trailing_zeros| 19 - trailing_zeros),
         ) as u16;
         writer.write_bits(5, literal_code_count - 257)?;
@@ -397,7 +411,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             bitwidth_code_bitwidthes[i] = reader.read_bits(3)? as u8;
         }
         let bitwidth_decoder =
-            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, None)?;
+            huffman::DecoderBuilder::from_bitwidthes(&bitwidth_code_bitwidthes, Some(1), None)?;
 
         let mut literal_code_bitwidthes = Vec::with_capacity(literal_code_count as usize);
         while literal_code_bitwidthes.len() < literal_code_count as usize {
@@ -426,13 +440,17 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
 
-        Ok(Decoder {
-            literal: huffman::DecoderBuilder::from_bitwidthes(
-                &literal_code_bitwidthes,
-                Some(END_OF_BLOCK),
-            )?,
-            distance: huffman::DecoderBuilder::from_bitwidthes(&distance_code_bitwidthes, None)?,
-        })
+        let literal = huffman::DecoderBuilder::from_bitwidthes(
+            &literal_code_bitwidthes,
+            None,
+            Some(END_OF_BLOCK),
+        )?;
+        let distance = huffman::DecoderBuilder::from_bitwidthes(
+            &distance_code_bitwidthes,
+            Some(literal.safely_peek_bitwidth()),
+            None,
+        )?;
+        Ok(Decoder { literal, distance })
     }
 }
 
@@ -440,12 +458,12 @@ fn load_bitwidthes<R>(
     reader: &mut bit::BitReader<R>,
     code: u16,
     last: Option<u8>,
-) -> io::Result<Box<Iterator<Item = u8>>>
+) -> io::Result<Box<dyn Iterator<Item = u8>>>
 where
     R: io::Read,
 {
     Ok(match code {
-        0...15 => Box::new(iter::once(code as u8)),
+        0..=15 => Box::new(iter::once(code as u8)),
         16 => {
             let count = reader.read_bits(2)? + 3;
             let last = last.ok_or_else(|| invalid_data_error!("No preceding value"))?;
