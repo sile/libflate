@@ -69,6 +69,8 @@ impl From<lz77::CompressionLevel> for CompressionLevel {
 
 /// LZ77 Window sizes defined by the ZLIB format.
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+// TODO: Use `#[allow(clippy::upper_case_acronyms)]` instead once it gets available on the stable branch
+#[allow(clippy::all)]
 pub enum Lz77WindowSize {
     /// 256 bytes
     B256 = 0,
