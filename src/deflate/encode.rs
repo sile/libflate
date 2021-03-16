@@ -426,8 +426,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::super::Decoder;
     use super::*;
-    use std::io::Write;
+    use std::io::{Read as _, Write as _};
 
     #[test]
     fn test_issues_52() {
@@ -453,16 +454,9 @@ mod tests {
 
         assert!(LIMIT_2 > compressed.len());
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::Decoder;
-    use super::*;
-    use std::io::{Read as _, Write as _};
 
     #[test]
-    fn issue_27() {
+    fn test_issue_27() {
         // See: https://github.com/sile/libflate/issues/27
 
         let writes = ["fooooooooooooooooo", "bar", "baz"];

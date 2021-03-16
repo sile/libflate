@@ -250,7 +250,7 @@ impl Header {
             invalid_data_error!("CINFO above 7 are not allowed: value={}", compression_info)
         })?;
 
-        let dict_flag = (flg & 0b100_000) != 0;
+        let dict_flag = (flg & 0b10_0000) != 0;
         if dict_flag {
             let mut buf = [0; 4];
             reader.read_exact(&mut buf)?;
