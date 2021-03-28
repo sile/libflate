@@ -2,6 +2,7 @@
 //!
 //! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
 pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
+use rle_decode_fast::rle_decode;
 
 mod default;
 
@@ -15,7 +16,7 @@ pub const MAX_DISTANCE: u16 = 32_768;
 pub const MAX_WINDOW_SIZE: u16 = MAX_DISTANCE;
 
 /// A LZ77 encoded data.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Code {
     /// Literal byte.
     Literal(u8),
@@ -135,5 +136,96 @@ impl Lz77Encode for NoCompressionLz77Encoder {
     }
     fn compression_level(&self) -> CompressionLevel {
         CompressionLevel::None
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Lz77Decoder {
+    buffer: Vec<u8>,
+    offset: usize,
+}
+
+impl Lz77Decoder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub fn decode(&mut self, code: Code) -> std::io::Result<()> {
+        match code {
+            Code::Literal(b) => {
+                self.buffer.push(b);
+            }
+            Code::Pointer {
+                length,
+                backward_distance,
+            } => {
+                if self.buffer.len() < backward_distance as usize {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Too long backword reference: buffer.len={}, distance={}",
+                            self.buffer.len(),
+                            backward_distance
+                        ),
+                    ));
+                }
+                rle_decode(
+                    &mut self.buffer,
+                    usize::from(backward_distance),
+                    usize::from(length),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    pub fn extend_from_reader<R: std::io::Read>(
+        &mut self,
+        mut reader: R,
+    ) -> std::io::Result<usize> {
+        reader.read_to_end(&mut self.buffer)
+    }
+
+    pub fn extend_from_slice(&mut self, buf: &[u8]) {
+        self.buffer.extend_from_slice(buf);
+        self.offset += buf.len();
+    }
+
+    pub fn truncate_old_buffer(&mut self) {
+        if self.buffer.len() > MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
+            let new_len = MAX_DISTANCE as usize;
+            {
+                // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
+            }
+            self.buffer.truncate(new_len);
+            self.offset = new_len;
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        self.offset = 0;
+    }
+
+    #[inline]
+    pub fn buffer(&self) -> &[u8] {
+        &self.buffer[self.offset..]
+    }
+
+    pub fn reserve(&mut self, len: usize) {
+        self.buffer.reserve(len);
+    }
+}
+
+impl std::io::Read for Lz77Decoder {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let copy_size = std::cmp::min(buf.len(), self.buffer.len() - self.offset);
+        buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
+        self.offset += copy_size;
+        Ok(copy_size)
     }
 }

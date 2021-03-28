@@ -1,8 +1,6 @@
 use super::symbol;
 use crate::bit;
 use crate::lz77;
-use rle_decode_fast::rle_decode;
-use std::cmp;
 use std::io;
 use std::io::Read;
 
@@ -10,8 +8,7 @@ use std::io::Read;
 #[derive(Debug)]
 pub struct Decoder<R> {
     bit_reader: bit::BitReader<R>,
-    buffer: Vec<u8>,
-    offset: usize,
+    lz77_decoder: lz77::Lz77Decoder,
     eos: bool,
 }
 impl<R> Decoder<R>
@@ -37,8 +34,7 @@ where
     pub fn new(inner: R) -> Self {
         Decoder {
             bit_reader: bit::BitReader::new(inner),
-            buffer: Vec::new(),
-            offset: 0,
+            lz77_decoder: lz77::Lz77Decoder::new(),
             eos: false,
         }
     }
@@ -70,8 +66,7 @@ where
 
     pub(crate) fn reset(&mut self) {
         self.bit_reader.reset();
-        self.buffer.clear();
-        self.offset = 0;
+        self.lz77_decoder.clear();
         self.eos = false
     }
 
@@ -89,10 +84,8 @@ where
                 nlen
             ))
         } else {
-            self.bit_reader
-                .as_inner_mut()
-                .take(len.into())
-                .read_to_end(&mut self.buffer)
+            self.lz77_decoder
+                .extend_from_reader(self.bit_reader.as_inner_mut().take(len.into()))
                 .and_then(|used| {
                     if used != len.into() {
                         Err(io::Error::new(
@@ -117,18 +110,8 @@ where
             let s = symbol_decoder.decode_unchecked(&mut self.bit_reader);
             self.bit_reader.check_last_error()?;
             match s {
-                symbol::Symbol::Literal(b) => {
-                    self.buffer.push(b);
-                }
-                symbol::Symbol::Share { length, distance } => {
-                    if self.buffer.len() < distance as usize {
-                        return Err(invalid_data_error!(
-                            "Too long backword reference: buffer.len={}, distance={}",
-                            self.buffer.len(),
-                            distance
-                        ));
-                    }
-                    rle_decode(&mut self.buffer, usize::from(distance), usize::from(length));
+                symbol::Symbol::Code(code) => {
+                    self.lz77_decoder.decode(code)?;
                 }
                 symbol::Symbol::EndOfBlock => {
                     break;
@@ -137,37 +120,21 @@ where
         }
         Ok(())
     }
-    fn truncate_old_buffer(&mut self) {
-        if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
-            let old_len = self.buffer.len();
-            let new_len = lz77::MAX_DISTANCE as usize;
-            {
-                // isolation to please borrow checker
-                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
-                dst[..new_len].copy_from_slice(src);
-            }
-            self.buffer.truncate(new_len);
-            self.offset = new_len;
-        }
-    }
 }
 impl<R> Read for Decoder<R>
 where
     R: Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.offset < self.buffer.len() {
-            let copy_size = cmp::min(buf.len(), self.buffer.len() - self.offset);
-            buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
-            self.offset += copy_size;
-            Ok(copy_size)
+        if !self.lz77_decoder.buffer().is_empty() {
+            self.lz77_decoder.read(buf)
         } else if self.eos {
             Ok(0)
         } else {
             let bfinal = self.bit_reader.read_bit()?;
             let btype = self.bit_reader.read_bits(2)?;
             self.eos = bfinal;
-            self.truncate_old_buffer();
+            self.lz77_decoder.truncate_old_buffer();
             match btype {
                 0b00 => {
                     self.read_non_compressed_block()?;
