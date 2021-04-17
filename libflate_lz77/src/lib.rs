@@ -1,6 +1,7 @@
 //! The interface and implementations of LZ77 compression algorithm.
 //!
 //! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
+#![warn(missing_docs)]
 pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
 use rle_decode_fast::rle_decode;
 
@@ -24,11 +25,11 @@ pub enum Code {
     /// Backward pointer to shared data.
     Pointer {
         /// Length of the shared data.
-        /// The values must be limited to `MAX_LENGTH`.
+        /// The values must be limited to [`MAX_LENGTH`].
         length: u16,
 
         /// Distance between current position and start position of the shared data.
-        /// The values must be limited to `MAX_DISTANCE`.
+        /// The values must be limited to [`MAX_DISTANCE`].
         backward_distance: u16,
     },
 }
@@ -49,7 +50,7 @@ pub enum CompressionLevel {
     Best,
 }
 
-/// The `Sink` trait represents a consumer of LZ77 encoded data.
+/// The [`Sink`] trait represents a consumer of LZ77 encoded data.
 pub trait Sink {
     /// Consumes a LZ77 encoded `Code`.
     fn consume(&mut self, code: Code);
@@ -71,7 +72,7 @@ where
     }
 }
 
-/// The `LZ77Encode` trait defines the interface of LZ77 encoding algorithm.
+/// The [`Lz77Encode`] trait defines the interface of LZ77 encoding algorithm.
 pub trait Lz77Encode {
     /// Encodes a buffer and writes result LZ77 codes to `sink`.
     fn encode<S>(&mut self, buf: &[u8], sink: S)
@@ -85,20 +86,20 @@ pub trait Lz77Encode {
 
     /// Returns the compression level of the encoder.
     ///
-    /// If the implementation is omitted, `CompressionLevel::Balance` will be returned.
+    /// If the implementation is omitted, [`CompressionLevel::Balance`] will be returned.
     fn compression_level(&self) -> CompressionLevel {
         CompressionLevel::Balance
     }
 
     /// Returns the window size of the encoder.
     ///
-    /// If the implementation is omitted, `MAX_WINDOW_SIZE` will be returned.
+    /// If the implementation is omitted, [`MAX_WINDOW_SIZE`] will be returned.
     fn window_size(&self) -> u16 {
         MAX_WINDOW_SIZE
     }
 }
 
-/// A no compression implementation of `LZ77Encode` trait.
+/// A no compression implementation of [`Lz77Encode`] trait.
 #[derive(Debug, Default)]
 pub struct NoCompressionLz77Encoder;
 impl NoCompressionLz77Encoder {
@@ -139,6 +140,7 @@ impl Lz77Encode for NoCompressionLz77Encoder {
     }
 }
 
+/// LZ77 decoder.
 #[derive(Debug, Default)]
 pub struct Lz77Decoder {
     buffer: Vec<u8>,
@@ -146,10 +148,14 @@ pub struct Lz77Decoder {
 }
 
 impl Lz77Decoder {
+    /// Makes a new [`Lz77Decoder`] instance.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Decodes a [`Code`].
+    ///
+    /// The decoded bytes are appended to the buffer of [`Lz77Decoder`].
     #[inline]
     pub fn decode(&mut self, code: Code) -> std::io::Result<()> {
         match code {
@@ -180,6 +186,7 @@ impl Lz77Decoder {
         Ok(())
     }
 
+    /// Appends the bytes read from `reader` to the buffer of [`Lz77Decoder`].
     pub fn extend_from_reader<R: std::io::Read>(
         &mut self,
         mut reader: R,
@@ -187,21 +194,25 @@ impl Lz77Decoder {
         reader.read_to_end(&mut self.buffer)
     }
 
+    /// Appends the given bytes to the buffer of [`Lz77Decoder`].
     pub fn extend_from_slice(&mut self, buf: &[u8]) {
         self.buffer.extend_from_slice(buf);
         self.offset += buf.len();
     }
 
+    /// Clears the buffer of [`Lz77Decoder`].
     pub fn clear(&mut self) {
         self.buffer.clear();
         self.offset = 0;
     }
 
+    /// Returns the buffer of [`Lz77Decoder`].
     #[inline]
     pub fn buffer(&self) -> &[u8] {
         &self.buffer[self.offset..]
     }
 
+    /// Extends the buffer to be able to contain the given number of bytes if need.
     pub fn reserve(&mut self, len: usize) {
         self.buffer.reserve(len);
     }
