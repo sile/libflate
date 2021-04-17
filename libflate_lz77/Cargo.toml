@@ -12,8 +12,10 @@ categories = ["compression"]
 license = "MIT"
 
 [badges]
-travis-ci = {repository = "sile/libflate"}
-codecov = {repository = "sile/libflate"}
+coveralls = {repository = "sile/libflate"}
+
+[dependencies]
+rle-decode-fast = "1.0.0"
 
 [dev-dependencies]
 libflate = { path = "../", version = "1" }

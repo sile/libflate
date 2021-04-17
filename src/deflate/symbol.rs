@@ -90,15 +90,14 @@ const DISTANCE_TABLE: [(u16, u8); 30] = [
 #[derive(Debug, PartialEq, Eq)]
 pub enum Symbol {
     EndOfBlock,
-    Literal(u8),
-    Share { length: u16, distance: u16 },
+    Code(lz77::Code),
 }
 impl Symbol {
     pub fn code(&self) -> u16 {
         match *self {
-            Symbol::Literal(b) => u16::from(b),
+            Symbol::Code(lz77::Code::Literal(b)) => u16::from(b),
             Symbol::EndOfBlock => 256,
-            Symbol::Share { length, .. } => match length {
+            Symbol::Code(lz77::Code::Pointer { length, .. }) => match length {
                 3..=10 => 257 + length - 3,
                 11..=18 => 265 + (length - 11) / 2,
                 19..=34 => 269 + (length - 19) / 4,
@@ -111,7 +110,7 @@ impl Symbol {
         }
     }
     pub fn extra_lengh(&self) -> Option<(u8, u16)> {
-        if let Symbol::Share { length, .. } = *self {
+        if let Symbol::Code(lz77::Code::Pointer { length, .. }) = *self {
             match length {
                 3..=10 | 258 => None,
                 11..=18 => Some((1, (length - 11) % 2)),
@@ -126,7 +125,11 @@ impl Symbol {
         }
     }
     pub fn distance(&self) -> Option<(u8, u8, u16)> {
-        if let Symbol::Share { distance, .. } = *self {
+        if let Symbol::Code(lz77::Code::Pointer {
+            backward_distance: distance,
+            ..
+        }) = *self
+        {
             if distance <= 4 {
                 Some((distance as u8 - 1, 0, 0))
             } else {
@@ -153,16 +156,7 @@ impl Symbol {
 }
 impl From<lz77::Code> for Symbol {
     fn from(code: lz77::Code) -> Self {
-        match code {
-            lz77::Code::Literal(b) => Symbol::Literal(b),
-            lz77::Code::Pointer {
-                length,
-                backward_distance,
-            } => Symbol::Share {
-                length,
-                distance: backward_distance,
-            },
-        }
+        Symbol::Code(code)
     }
 }
 
@@ -202,11 +196,12 @@ impl Decoder {
         R: io::Read,
     {
         let mut symbol = self.decode_literal_or_length(reader);
-        if let Symbol::Share {
-            ref mut distance, ..
-        } = symbol
+        if let Symbol::Code(lz77::Code::Pointer {
+            ref mut backward_distance,
+            ..
+        }) = symbol
         {
-            *distance = self.decode_distance(reader);
+            *backward_distance = self.decode_distance(reader);
         }
         symbol
     }
@@ -217,7 +212,7 @@ impl Decoder {
     {
         let decoded = self.literal.decode_unchecked(reader);
         match decoded {
-            0..=255 => Symbol::Literal(decoded as u8),
+            0..=255 => Symbol::Code(lz77::Code::Literal(decoded as u8)),
             256 => Symbol::EndOfBlock,
             286 | 287 => {
                 let message = format!("The value {} must not occur in compressed data", decoded);
@@ -227,10 +222,10 @@ impl Decoder {
             length_code => {
                 let (base, extra_bits) = LENGTH_TABLE[length_code as usize - 257];
                 let extra = reader.read_bits_unchecked(extra_bits);
-                Symbol::Share {
+                Symbol::Code(lz77::Code::Pointer {
                     length: base + extra,
-                    distance: 0,
-                }
+                    backward_distance: 0,
+                })
             }
         }
     }

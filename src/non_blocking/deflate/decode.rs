@@ -1,7 +1,6 @@
 use crate::deflate::symbol::{self, HuffmanCodec};
 use crate::lz77;
 use crate::non_blocking::transaction::TransactionalBitReader;
-use rle_decode_fast::rle_decode;
 use std::cmp;
 use std::io;
 use std::io::Read;
@@ -112,7 +111,6 @@ impl<R: Read> Read for Decoder<R> {
                             Ok(len)
                         }
                     })?;
-                    self.block_decoder.buffer.reserve(len as usize);
                     DecoderState::ReadNonCompressedBlock { len }
                 }
                 DecoderState::ReadNonCompressedBlock { len: 0 } => {
@@ -173,21 +171,18 @@ enum DecoderState {
 
 #[derive(Debug)]
 struct BlockDecoder {
-    buffer: Vec<u8>,
-    offset: usize,
+    lz77_decoder: lz77::Lz77Decoder,
     eob: bool,
 }
 impl BlockDecoder {
     pub fn new() -> Self {
         BlockDecoder {
-            buffer: Vec::new(),
-            offset: 0,
+            lz77_decoder: lz77::Lz77Decoder::new(),
             eob: false,
         }
     }
     pub fn enter_new_block(&mut self) {
         self.eob = false;
-        self.truncate_old_buffer();
     }
     pub fn decode<R: Read>(
         &mut self,
@@ -199,18 +194,8 @@ impl BlockDecoder {
         }
         while let Some(s) = self.decode_symbol(bit_reader, symbol_decoder)? {
             match s {
-                symbol::Symbol::Literal(b) => {
-                    self.buffer.push(b);
-                }
-                symbol::Symbol::Share { length, distance } => {
-                    if self.buffer.len() < distance as usize {
-                        return Err(invalid_data_error!(
-                            "Too long backword reference: buffer.len={}, distance={}",
-                            self.buffer.len(),
-                            distance
-                        ));
-                    }
-                    rle_decode(&mut self.buffer, usize::from(distance), usize::from(length));
+                symbol::Symbol::Code(code) => {
+                    self.lz77_decoder.decode(code)?;
                 }
                 symbol::Symbol::EndOfBlock => {
                     self.eob = true;
@@ -220,23 +205,9 @@ impl BlockDecoder {
         }
         Ok(())
     }
-    fn truncate_old_buffer(&mut self) {
-        if self.buffer.len() > lz77::MAX_DISTANCE as usize * 4 {
-            let old_len = self.buffer.len();
-            let new_len = lz77::MAX_DISTANCE as usize;
-            {
-                // isolation to please borrow checker
-                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
-                dst[..new_len].copy_from_slice(src);
-            }
-            self.buffer.truncate(new_len);
-            self.offset = new_len;
-        }
-    }
 
     fn extend(&mut self, buf: &[u8]) {
-        self.buffer.extend_from_slice(buf);
-        self.offset += buf.len();
+        self.lz77_decoder.extend_from_slice(buf);
     }
 
     fn decode_symbol<R: Read>(
@@ -257,11 +228,8 @@ impl BlockDecoder {
 }
 impl Read for BlockDecoder {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.offset < self.buffer.len() {
-            let copy_size = cmp::min(buf.len(), self.buffer.len() - self.offset);
-            buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
-            self.offset += copy_size;
-            Ok(copy_size)
+        if !self.lz77_decoder.buffer().is_empty() {
+            self.lz77_decoder.read(buf)
         } else if self.eob {
             Ok(0)
         } else {

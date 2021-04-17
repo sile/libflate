@@ -18,11 +18,11 @@ mod tests {
         assert_eq!(
             sink,
             vec![
-                Symbol::Literal(97),
-                Symbol::Share {
+                Symbol::Code(Code::Literal(97)),
+                Symbol::Code(Code::Pointer {
                     length: 4,
-                    distance: 1
-                }
+                    backward_distance: 1
+                })
             ]
         );
     }

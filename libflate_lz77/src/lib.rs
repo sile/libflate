@@ -1,7 +1,9 @@
 //! The interface and implementations of LZ77 compression algorithm.
 //!
 //! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
+#![warn(missing_docs)]
 pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
+use rle_decode_fast::rle_decode;
 
 mod default;
 
@@ -15,7 +17,7 @@ pub const MAX_DISTANCE: u16 = 32_768;
 pub const MAX_WINDOW_SIZE: u16 = MAX_DISTANCE;
 
 /// A LZ77 encoded data.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Code {
     /// Literal byte.
     Literal(u8),
@@ -23,11 +25,11 @@ pub enum Code {
     /// Backward pointer to shared data.
     Pointer {
         /// Length of the shared data.
-        /// The values must be limited to `MAX_LENGTH`.
+        /// The values must be limited to [`MAX_LENGTH`].
         length: u16,
 
         /// Distance between current position and start position of the shared data.
-        /// The values must be limited to `MAX_DISTANCE`.
+        /// The values must be limited to [`MAX_DISTANCE`].
         backward_distance: u16,
     },
 }
@@ -48,7 +50,7 @@ pub enum CompressionLevel {
     Best,
 }
 
-/// The `Sink` trait represents a consumer of LZ77 encoded data.
+/// The [`Sink`] trait represents a consumer of LZ77 encoded data.
 pub trait Sink {
     /// Consumes a LZ77 encoded `Code`.
     fn consume(&mut self, code: Code);
@@ -70,7 +72,7 @@ where
     }
 }
 
-/// The `LZ77Encode` trait defines the interface of LZ77 encoding algorithm.
+/// The [`Lz77Encode`] trait defines the interface of LZ77 encoding algorithm.
 pub trait Lz77Encode {
     /// Encodes a buffer and writes result LZ77 codes to `sink`.
     fn encode<S>(&mut self, buf: &[u8], sink: S)
@@ -84,20 +86,20 @@ pub trait Lz77Encode {
 
     /// Returns the compression level of the encoder.
     ///
-    /// If the implementation is omitted, `CompressionLevel::Balance` will be returned.
+    /// If the implementation is omitted, [`CompressionLevel::Balance`] will be returned.
     fn compression_level(&self) -> CompressionLevel {
         CompressionLevel::Balance
     }
 
     /// Returns the window size of the encoder.
     ///
-    /// If the implementation is omitted, `MAX_WINDOW_SIZE` will be returned.
+    /// If the implementation is omitted, [`MAX_WINDOW_SIZE`] will be returned.
     fn window_size(&self) -> u16 {
         MAX_WINDOW_SIZE
     }
 }
 
-/// A no compression implementation of `LZ77Encode` trait.
+/// A no compression implementation of [`Lz77Encode`] trait.
 #[derive(Debug, Default)]
 pub struct NoCompressionLz77Encoder;
 impl NoCompressionLz77Encoder {
@@ -135,5 +137,128 @@ impl Lz77Encode for NoCompressionLz77Encoder {
     }
     fn compression_level(&self) -> CompressionLevel {
         CompressionLevel::None
+    }
+}
+
+/// LZ77 decoder.
+#[derive(Debug, Default)]
+pub struct Lz77Decoder {
+    buffer: Vec<u8>,
+    offset: usize,
+}
+
+impl Lz77Decoder {
+    /// Makes a new [`Lz77Decoder`] instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Decodes a [`Code`].
+    ///
+    /// The decoded bytes are appended to the buffer of [`Lz77Decoder`].
+    #[inline]
+    pub fn decode(&mut self, code: Code) -> std::io::Result<()> {
+        match code {
+            Code::Literal(b) => {
+                self.buffer.push(b);
+            }
+            Code::Pointer {
+                length,
+                backward_distance,
+            } => {
+                if self.buffer.len() < backward_distance as usize {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "Too long backword reference: buffer.len={}, distance={}",
+                            self.buffer.len(),
+                            backward_distance
+                        ),
+                    ));
+                }
+                rle_decode(
+                    &mut self.buffer,
+                    usize::from(backward_distance),
+                    usize::from(length),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Appends the bytes read from `reader` to the buffer of [`Lz77Decoder`].
+    pub fn extend_from_reader<R: std::io::Read>(
+        &mut self,
+        mut reader: R,
+    ) -> std::io::Result<usize> {
+        reader.read_to_end(&mut self.buffer)
+    }
+
+    /// Appends the given bytes to the buffer of [`Lz77Decoder`].
+    pub fn extend_from_slice(&mut self, buf: &[u8]) {
+        self.buffer.extend_from_slice(buf);
+        self.offset += buf.len();
+    }
+
+    /// Clears the buffer of [`Lz77Decoder`].
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+        self.offset = 0;
+    }
+
+    /// Returns the buffer of [`Lz77Decoder`].
+    #[inline]
+    pub fn buffer(&self) -> &[u8] {
+        &self.buffer[self.offset..]
+    }
+
+    fn truncate_old_buffer(&mut self) {
+        if self.buffer().is_empty() && self.buffer.len() > MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
+            let new_len = MAX_DISTANCE as usize;
+            {
+                // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
+            }
+            self.buffer.truncate(new_len);
+            self.offset = new_len;
+        }
+    }
+}
+
+impl std::io::Read for Lz77Decoder {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let copy_size = std::cmp::min(buf.len(), self.buffer.len() - self.offset);
+        buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
+        self.offset += copy_size;
+        self.truncate_old_buffer();
+        Ok(copy_size)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read as _;
+
+    #[test]
+    fn encoder_and_decoder_works() {
+        let mut codes = Vec::new();
+        let mut encoder = DefaultLz77Encoder::new();
+        encoder.encode(b"hello world!", &mut codes);
+        encoder.flush(&mut codes);
+        assert!(!codes.is_empty());
+
+        let mut decoder = Lz77Decoder::new();
+        for code in codes {
+            decoder.decode(code).unwrap();
+        }
+        assert_eq!(decoder.buffer(), b"hello world!");
+
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, b"hello world!");
+        assert!(decoder.buffer().is_empty());
     }
 }

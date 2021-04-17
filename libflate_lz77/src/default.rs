@@ -5,7 +5,7 @@ use super::Code;
 use super::Lz77Encode;
 use super::Sink;
 
-/// A `Lz77Encode` implementation used by default.
+/// A [`Lz77Encode`] implementation used by default.
 #[derive(Debug)]
 pub struct DefaultLz77Encoder {
     window_size: u16,
@@ -186,7 +186,7 @@ impl LargePrefixTable {
     }
 }
 
-/// Type for constructing instances of `DefaultLz77Encoder`.
+/// Type for constructing instances of [`DefaultLz77Encoder`].
 ///
 /// # Examples
 /// ```
