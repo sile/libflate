@@ -213,7 +213,7 @@ impl Lz77Decoder {
     }
 
     fn truncate_old_buffer(&mut self) {
-        if self.buffer.len() > MAX_DISTANCE as usize * 4 {
+        if self.buffer().is_empty() && self.buffer.len() > MAX_DISTANCE as usize * 4 {
             let old_len = self.buffer.len();
             let new_len = MAX_DISTANCE as usize;
             {
