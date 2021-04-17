@@ -192,20 +192,6 @@ impl Lz77Decoder {
         self.offset += buf.len();
     }
 
-    pub fn truncate_old_buffer(&mut self) {
-        if self.buffer.len() > MAX_DISTANCE as usize * 4 {
-            let old_len = self.buffer.len();
-            let new_len = MAX_DISTANCE as usize;
-            {
-                // isolation to please borrow checker
-                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
-                dst[..new_len].copy_from_slice(src);
-            }
-            self.buffer.truncate(new_len);
-            self.offset = new_len;
-        }
-    }
-
     pub fn clear(&mut self) {
         self.buffer.clear();
         self.offset = 0;
@@ -219,6 +205,20 @@ impl Lz77Decoder {
     pub fn reserve(&mut self, len: usize) {
         self.buffer.reserve(len);
     }
+
+    fn truncate_old_buffer(&mut self) {
+        if self.buffer.len() > MAX_DISTANCE as usize * 4 {
+            let old_len = self.buffer.len();
+            let new_len = MAX_DISTANCE as usize;
+            {
+                // isolation to please borrow checker
+                let (dst, src) = self.buffer.split_at_mut(old_len - new_len);
+                dst[..new_len].copy_from_slice(src);
+            }
+            self.buffer.truncate(new_len);
+            self.offset = new_len;
+        }
+    }
 }
 
 impl std::io::Read for Lz77Decoder {
@@ -226,6 +226,7 @@ impl std::io::Read for Lz77Decoder {
         let copy_size = std::cmp::min(buf.len(), self.buffer.len() - self.offset);
         buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
         self.offset += copy_size;
+        self.truncate_old_buffer();
         Ok(copy_size)
     }
 }

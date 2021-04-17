@@ -134,7 +134,6 @@ where
             let bfinal = self.bit_reader.read_bit()?;
             let btype = self.bit_reader.read_bits(2)?;
             self.eos = bfinal;
-            self.lz77_decoder.truncate_old_buffer();
             match btype {
                 0b00 => {
                     self.read_non_compressed_block()?;

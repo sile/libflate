@@ -184,7 +184,6 @@ impl BlockDecoder {
     }
     pub fn enter_new_block(&mut self) {
         self.eob = false;
-        self.lz77_decoder.truncate_old_buffer();
     }
     pub fn decode<R: Read>(
         &mut self,
