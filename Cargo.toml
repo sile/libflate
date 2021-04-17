@@ -1,6 +1,6 @@
 [package]
 name = "libflate"
-version = "1.0.4"
+version = "1.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 description = "A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP)"
 homepage = "https://github.com/sile/libflate"
@@ -17,7 +17,7 @@ coveralls = {repository = "sile/libflate"}
 [dependencies]
 adler32 = "1"
 crc32fast = "1.1.1"
-libflate_lz77 = { path = "libflate_lz77", version = "1" }
+libflate_lz77 = { path = "libflate_lz77", version = "1.1" }
 
 [dev-dependencies]
 clap = "2"
