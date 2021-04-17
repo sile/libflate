@@ -236,3 +236,29 @@ impl std::io::Read for Lz77Decoder {
         Ok(copy_size)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Read as _;
+
+    #[test]
+    fn encoder_and_decoder_works() {
+        let mut codes = Vec::new();
+        let mut encoder = DefaultLz77Encoder::new();
+        encoder.encode(b"hello world!", &mut codes);
+        encoder.flush(&mut codes);
+        assert!(!codes.is_empty());
+
+        let mut decoder = Lz77Decoder::new();
+        for code in codes {
+            decoder.decode(code).unwrap();
+        }
+        assert_eq!(decoder.buffer(), b"hello world!");
+
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, b"hello world!");
+        assert!(decoder.buffer().is_empty());
+    }
+}
