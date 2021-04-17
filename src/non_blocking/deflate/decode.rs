@@ -111,7 +111,6 @@ impl<R: Read> Read for Decoder<R> {
                             Ok(len)
                         }
                     })?;
-                    self.block_decoder.lz77_decoder.reserve(len as usize);
                     DecoderState::ReadNonCompressedBlock { len }
                 }
                 DecoderState::ReadNonCompressedBlock { len: 0 } => {

@@ -212,11 +212,6 @@ impl Lz77Decoder {
         &self.buffer[self.offset..]
     }
 
-    /// Extends the buffer to be able to contain the given number of bytes if need.
-    pub fn reserve(&mut self, len: usize) {
-        self.buffer.reserve(len);
-    }
-
     fn truncate_old_buffer(&mut self) {
         if self.buffer.len() > MAX_DISTANCE as usize * 4 {
             let old_len = self.buffer.len();
