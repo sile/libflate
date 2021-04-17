@@ -1,6 +1,6 @@
 [package]
 name = "libflate_lz77"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 edition = "2018"
 description = "LZ77 encoder for libflate crate"
