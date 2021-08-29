@@ -999,6 +999,10 @@ where
             let read_size = self.reader.read(buf)?;
             self.crc32.update(&buf[..read_size]);
             if read_size == 0 {
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+
                 self.eos = true;
                 let trailer = Trailer::read_from(self.reader.as_inner_mut())?;
                 // checksum verification is skipped during fuzzing
@@ -1143,7 +1147,7 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
-    use std::io::{self, Write};
+    use std::io::{self, Read, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -1216,6 +1220,17 @@ mod tests {
     fn issue_15_3() {
         let data = b"\x1F\x8B\x08\xC1\x91\x28\x71\xDC\xF2\x2D\x34\x35\x31\x35\x34\x30\x70\x6E\x60\x35\x31\x32\x32\x33\x32\x33\x37\x32\x36\x38\xDD\x1C\xE5\x2A\xDD\xDD\xDD\x22\xDD\xDD\xDD\xDC\x88\x13\xC9\x40\x60\xA7";
         assert!(decode(&data[..]).is_err());
+    }
+
+    #[test]
+    /// See: https://github.com/sile/libflate/issues/61
+    fn issue_61() {
+        let data = encode(b"Hello World").unwrap();
+        let mut decoder = Decoder::new(&data[..]).unwrap();
+        let mut buf = Vec::new();
+        decoder.read(&mut buf).unwrap();
+        io::copy(&mut decoder, &mut buf).unwrap();
+        assert_eq!(buf, b"Hello World");
     }
 
     #[test]

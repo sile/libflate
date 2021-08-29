@@ -378,6 +378,10 @@ where
         } else {
             let read_size = self.reader.read(buf)?;
             if read_size == 0 {
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+
                 self.eos = true;
                 let mut buf = [0; 4];
                 self.reader.as_inner_mut().read_exact(&mut buf)?;
@@ -874,5 +878,16 @@ mod tests {
             output,
             "fooooooooooooooooobarbazfooooooooooooooooobarbaz".as_bytes()
         );
+    }
+
+    #[test]
+    /// See: https://github.com/sile/libflate/issues/61
+    fn issue_61() {
+        let data = default_encode(b"Hello World").unwrap();
+        let mut decoder = Decoder::new(&data[..]).unwrap();
+        let mut buf = Vec::new();
+        decoder.read(&mut buf).unwrap();
+        io::copy(&mut decoder, &mut buf).unwrap();
+        assert_eq!(buf, b"Hello World");
     }
 }
