@@ -121,7 +121,7 @@ impl Builder for DecoderBuilder {
             table: self.table,
             safely_peek_bitwidth: std::cmp::min(
                 self.max_bitwidth,
-                self.safely_peek_bitwidth.expect("bug"),
+                self.safely_peek_bitwidth.unwrap_or(1),
             ),
             max_bitwidth: self.max_bitwidth,
         }

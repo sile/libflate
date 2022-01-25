@@ -76,6 +76,19 @@ jobs:
           args: --all -- --check
 
       - name: Run cargo clippy
+        if: matrix.toolchain == 'beta'
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          # As `return_self_not_must_use` became `pedantic` in the 1.60.0-nightly channel,
+          # we allow the warning to avoid unnecessary code fixes.
+          # See: https://github.com/rust-lang/rust-clippy/issues/8197
+          #
+          # TODO: Remove this branch once stable-1.59.0 is released.
+          args: --all-features --all -- -D warnings --allow clippy::return_self_not_must_use
+
+      - name: Run cargo clippy
+        if: matrix.toolchain != 'beta'
         uses: actions-rs/cargo@v1
         with:
           command: clippy

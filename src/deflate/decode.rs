@@ -199,4 +199,11 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(error.to_string().starts_with("Too long backword reference"));
     }
+
+    #[test]
+    fn test_issue_64() {
+        let input = b"\x04\x04\x04\x05:\x1az*\xfc\x06\x01\x90\x01\x06\x01";
+        let mut decoder = Decoder::new(&input[..]);
+        assert!(io::copy(&mut decoder, &mut io::sink()).is_err());
+    }
 }
