@@ -1,4 +1,5 @@
 //! A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP).
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub use finish::Finish;
 
