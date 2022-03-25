@@ -442,7 +442,7 @@ where
         let mut cbuf = [0; 1];
         reader.read_exact(&mut cbuf)?;
         if cbuf[0] == 0 {
-            return Ok(unsafe { CString::from_vec_unchecked(buf) });
+            return Ok(CString::new(buf).unwrap());
         }
         buf.push(cbuf[0]);
     }
