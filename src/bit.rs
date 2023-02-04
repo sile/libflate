@@ -1,3 +1,6 @@
+#[cfg(feature = "no_std")]
+use core2::io;
+#[cfg(not(feature = "no_std"))]
 use std::io;
 
 #[derive(Debug)]
@@ -176,6 +179,9 @@ pub(crate) struct BitReaderState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "no_std")]
+    use core2::io;
+    #[cfg(not(feature = "no_std"))]
     use std::io;
 
     #[test]

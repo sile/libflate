@@ -1,5 +1,11 @@
-use std::cmp;
-use std::collections::HashMap;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
+#[cfg(feature = "no_std")]
+use core::cmp;
+#[cfg(feature = "no_std")]
+use hashbrown::HashMap;
+#[cfg(not(feature = "no_std"))]
+use std::{cmp, collections::HashMap};
 
 use super::Code;
 use super::Lz77Encode;

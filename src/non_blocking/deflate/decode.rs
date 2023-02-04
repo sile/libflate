@@ -1,9 +1,15 @@
 use crate::deflate::symbol::{self, HuffmanCodec};
 use crate::lz77;
 use crate::non_blocking::transaction::TransactionalBitReader;
-use std::cmp;
-use std::io;
-use std::io::Read;
+#[cfg(feature = "no_std")]
+use core::cmp;
+#[cfg(feature = "no_std")]
+use core2::io::{self, Read};
+#[cfg(not(feature = "no_std"))]
+use std::{
+    cmp,
+    io::{self, Read},
+};
 
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -20,6 +26,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::{Cursor, Read};
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::{Cursor, Read};
     /// use libflate::non_blocking::deflate::Decoder;
     ///
@@ -53,6 +62,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
     /// use libflate::non_blocking::deflate::Decoder;
     ///
@@ -243,12 +255,15 @@ mod tests {
     use super::*;
     use crate::deflate::{EncodeOptions, Encoder};
     use crate::util::{nb_read_to_end, WouldBlockReader};
-    use std::io::{self, Read};
+    #[cfg(feature = "no_std")]
+    use core2::io::{Read, Write};
+    #[cfg(not(feature = "no_std"))]
+    use std::io::{Read, Write};
 
     #[test]
     fn it_works() {
         let mut encoder = Encoder::new(Vec::new());
-        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        encoder.write_all(b"Hello World!".as_ref()).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 
         let mut decoder = Decoder::new(&encoded_data[..]);
@@ -261,7 +276,7 @@ mod tests {
     #[test]
     fn non_blocking_io_works() {
         let mut encoder = Encoder::new(Vec::new());
-        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        encoder.write_all(b"Hello World!".as_ref()).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 
         let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));
@@ -278,7 +293,7 @@ mod tests {
             .collect();
 
         let mut encoder = crate::deflate::Encoder::new(Vec::new());
-        io::copy(&mut text.as_bytes(), &mut encoder).unwrap();
+        encoder.write_all(text.as_bytes()).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 
         let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));
@@ -289,7 +304,7 @@ mod tests {
     #[test]
     fn non_compressed_non_blocking_io_works() {
         let mut encoder = Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression());
-        io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+        encoder.write_all(b"Hello World!".as_ref()).unwrap();
         let encoded_data = encoder.finish().into_result().unwrap();
 
         let decoder = Decoder::new(WouldBlockReader::new(&encoded_data[..]));

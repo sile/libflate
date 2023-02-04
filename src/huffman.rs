@@ -1,7 +1,13 @@
 //! Length-limited Huffman Codes.
 use crate::bit;
-use std::cmp;
-use std::io;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
+#[cfg(feature = "no_std")]
+use core::cmp;
+#[cfg(feature = "no_std")]
+use core2::io;
+#[cfg(not(feature = "no_std"))]
+use std::{cmp, io};
 
 const MAX_BITWIDTH: u8 = 15;
 
@@ -106,10 +112,13 @@ impl Builder for DecoderBuilder {
         for padding in 0..(1 << (self.max_bitwidth - code.width)) {
             let i = ((padding << code.width) | code_be.bits) as usize;
             if self.table[i] != u16::from(MAX_BITWIDTH) + 1 {
+                #[cfg(not(feature = "no_std"))]
                 let message = format!(
                     "Bit region conflict: i={}, old_value={}, new_value={}, symbol={}, code={:?}",
                     i, self.table[i], value, symbol, code
                 );
+                #[cfg(feature = "no_std")]
+                let message = "Bit region conflict";
                 return Err(io::Error::new(io::ErrorKind::InvalidData, message));
             }
             self.table[i] = value;

@@ -16,6 +16,11 @@ coveralls = {repository = "sile/libflate"}
 
 [dependencies]
 rle-decode-fast = "1.0.0"
+core2 = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+hashbrown = { version = "0.13", optional = true }
 
 [dev-dependencies]
 libflate = { path = "../", version = "1" }
+
+[features]
+no_std = ["core2", "hashbrown"]

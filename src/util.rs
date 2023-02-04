@@ -1,4 +1,6 @@
-#[cfg(test)]
+#[cfg(all(test, feature = "no_std"))]
+use core2::io::{self, Read};
+#[cfg(all(test, not(feature = "no_std")))]
 use std::io::{self, Read};
 
 #[cfg(test)]

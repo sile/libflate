@@ -1,6 +1,14 @@
 //! `Finish` and related types.
-use std::io::{self, Write};
-use std::ops::{Deref, DerefMut};
+
+#[cfg(feature = "no_std")]
+use core::ops::{Deref, DerefMut};
+#[cfg(feature = "no_std")]
+use core2::io::{self, Write};
+#[cfg(not(feature = "no_std"))]
+use std::{
+    io::{self, Write},
+    ops::{Deref, DerefMut},
+};
 
 /// `Finish` is a type that represents a value which
 /// may have an error occurred during the computation.
@@ -104,14 +112,17 @@ impl<T: Complete> AutoFinish<T> {
     /// # Examples
     ///
     /// ```
-    /// use std::io;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
+    /// use std::io::Write;
     /// use libflate::finish::AutoFinish;
     /// use libflate::gzip::Encoder;
     ///
     /// let plain = b"Hello World!";
     /// let mut buf = Vec::new();
     /// let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
-    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// encoder.write_all(plain.as_ref()).unwrap();
     /// ```
     pub fn new(inner: T) -> Self {
         AutoFinish { inner: Some(inner) }
@@ -166,14 +177,17 @@ impl<T: Complete> AutoFinishUnchecked<T> {
     /// # Examples
     ///
     /// ```
-    /// use std::io;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
+    /// use std::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
     ///
     /// let plain = b"Hello World!";
     /// let mut buf = Vec::new();
     /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
-    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// encoder.write_all(plain.as_ref()).unwrap();
     /// ```
     pub fn new(inner: T) -> Self {
         AutoFinishUnchecked { inner: Some(inner) }
