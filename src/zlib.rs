@@ -181,21 +181,17 @@ impl Lz77WindowSize {
 /// - [Zlib Flush Modes](https://www.bolet.org/~pornin/deflate-flush.html)
 ///
 /// [zlib]: https://www.zlib.net/
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FlushMode {
     /// `Z_NO_FLUSH` (default).
     ///
     /// Note that when this parameter is specified,
     /// no `zlib` specific processing will not be executed but ordinal DEFLATE layer flushing will be performed.
+    #[default]
     None = 0,
 
     /// `Z_SYNC_FLUSH`.
     Sync = 2,
-}
-impl Default for FlushMode {
-    fn default() -> Self {
-        FlushMode::None
-    }
 }
 
 /// ZLIB header.

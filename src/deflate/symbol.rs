@@ -215,7 +215,7 @@ impl Decoder {
             0..=255 => Symbol::Code(lz77::Code::Literal(decoded as u8)),
             256 => Symbol::EndOfBlock,
             286 | 287 => {
-                let message = format!("The value {} must not occur in compressed data", decoded);
+                let message = format!("The value {decoded} must not occur in compressed data");
                 reader.set_last_error(io::Error::new(io::ErrorKind::InvalidData, message));
                 Symbol::EndOfBlock // dummy value
             }
@@ -392,8 +392,7 @@ impl HuffmanCodec for DynamicHuffmanCodec {
 
         if distance_code_count as usize > MAX_DISTANCE_CODE_COUNT {
             let message = format!(
-                "The value of HDIST is too big: max={}, actual={}",
-                MAX_DISTANCE_CODE_COUNT, distance_code_count
+                "The value of HDIST is too big: max={MAX_DISTANCE_CODE_COUNT}, actual={distance_code_count}"
             );
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
@@ -491,7 +490,7 @@ fn build_bitwidth_codes(
         (&codec.literal, literal_code_count),
         (&codec.distance, distance_code_count),
     ] {
-        for (i, c) in (0..size).map(|x| e.lookup(x as u16).width).enumerate() {
+        for (i, c) in (0..size).map(|x| e.lookup(x).width).enumerate() {
             if i > 0 && run_lens.last().map_or(false, |s| s.value == c) {
                 run_lens.last_mut().unwrap().count += 1;
             } else {
