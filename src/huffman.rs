@@ -170,7 +170,7 @@ impl Decoder {
             }
             peek_bitwidth = bitwidth;
         }
-        reader.skip_bits(bitwidth as u8);
+        reader.skip_bits(bitwidth);
         value >> 5
     }
 }

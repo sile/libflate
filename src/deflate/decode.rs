@@ -90,10 +90,7 @@ where
                     if used != len.into() {
                         Err(io::Error::new(
                             io::ErrorKind::UnexpectedEof,
-                            format!(
-                                "The reader has incorrect length: expected {}, read {}",
-                                len, used
-                            ),
+                            format!("The reader has incorrect length: expected {len}, read {used}"),
                         ))
                     } else {
                         Ok(())

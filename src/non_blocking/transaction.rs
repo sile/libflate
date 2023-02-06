@@ -92,7 +92,7 @@ impl<R: Read> Read for TransactionalReader<R> {
         if self.offset < self.buffer.len() {
             let unread_buf_size = self.buffer.len() - self.offset;
             let size = cmp::min(buf.len(), unread_buf_size);
-            (&mut buf[0..size]).copy_from_slice(&self.buffer[self.offset..self.offset + size]);
+            buf[0..size].copy_from_slice(&self.buffer[self.offset..self.offset + size]);
             self.offset += size;
             return Ok(size);
         }
