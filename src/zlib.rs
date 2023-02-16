@@ -4,12 +4,15 @@
 //!
 //! # Examples
 //! ```
-//! use std::io::{self, Read};
+//! #[cfg(not(feature = "no_std"))]
+//! use std::io::{Read, Write};
+//! #[cfg(feature = "no_std")]
+//! use core2::io::{Read, Write};
 //! use libflate::zlib::{Encoder, Decoder};
 //!
 //! // Encoding
 //! let mut encoder = Encoder::new(Vec::new()).unwrap();
-//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! encoder.write_all(&b"Hello World!"[..]).unwrap();
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
@@ -23,6 +26,9 @@ use crate::checksum;
 use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
+#[cfg(feature = "no_std")]
+use core2::io;
+#[cfg(not(feature = "no_std"))]
 use std::io;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -252,11 +258,10 @@ impl Header {
         if dict_flag {
             let mut buf = [0; 4];
             reader.read_exact(&mut buf)?;
-            let dictionary_id = u32::from_be_bytes(buf);
             return Err(invalid_data_error!(
                 "Preset dictionaries are not supported: \
                  dictionary_id=0x{:X}",
-                dictionary_id
+                u32::from_be_bytes(buf)
             ));
         }
         let compression_level = CompressionLevel::from_u2(flg >> 6);
@@ -298,7 +303,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Read;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Read;
     /// use libflate::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -351,7 +359,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
     /// use libflate::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -529,7 +540,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -554,7 +568,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
     /// use libflate::zlib::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().no_compression();
@@ -592,7 +609,10 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -609,14 +629,17 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
-    /// use std::io;
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
+    /// use std::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::zlib::Encoder;
     ///
     /// let plain = b"Hello World!";
     /// let mut buf = Vec::new();
     /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
-    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// encoder.write_all(plain.as_ref()).unwrap();
     /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let mut inner = finish_try!(self.writer.finish());
@@ -675,17 +698,20 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
-    use std::io::{self, Read as _, Write as _};
+    #[cfg(feature = "no_std")]
+    use core2::io::{Read as _, Write as _};
+    #[cfg(not(feature = "no_std"))]
+    use std::io::{Read as _, Write as _};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
-        io::copy(&mut decoder, &mut buf)?;
+        decoder.read_to_end(&mut buf)?;
         Ok(buf)
     }
     fn default_encode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &buf[..], &mut encoder).unwrap();
+        encoder.write_all(buf).unwrap();
         encoder.finish().into_result()
     }
     macro_rules! assert_encode_decode {
@@ -711,7 +737,7 @@ mod tests {
         );
 
         let mut buf = Vec::new();
-        io::copy(&mut decoder, &mut buf).unwrap();
+        decoder.read_to_end(&mut buf).unwrap();
 
         let expected = b"Hello World!";
         assert_eq!(buf, expected);
@@ -721,7 +747,7 @@ mod tests {
     fn default_encode_works() {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
@@ -732,7 +758,7 @@ mod tests {
         let mut encoder =
             Encoder::with_options(Vec::new(), EncodeOptions::default().fixed_huffman_codes())
                 .unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }
@@ -746,7 +772,7 @@ mod tests {
         let plain = b"Hello World!";
         let mut encoder =
             Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression()).unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         let expected = RAW_ENCODE_WORKS_EXPECTED;
         assert_eq!(encoded, expected);
@@ -759,7 +785,7 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
-            io::copy(&mut &plain[..], &mut encoder).unwrap();
+            encoder.write_all(plain.as_ref()).unwrap();
         }
         assert_eq!(decode_all(&buf).unwrap(), plain);
     }
@@ -792,22 +818,37 @@ mod tests {
         let encoded =
             include_bytes!("../data/issues_16/crash-1bb6d408475a5bd57247ee40f290830adfe2086e");
         assert_eq!(
-            decode_all(&encoded[..]).err().map(|e| e.to_string()),
-            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+            &decode_all(&encoded[..])
+                .err()
+                .map(|e| e.to_string())
+                .unwrap()[..31],
+            "The value of HDIST is too big: max=30, actual=32"[..31]
+                .to_owned()
+                .as_str()
         );
 
         let encoded =
             include_bytes!("../data/issues_16/crash-369e8509a0e76356f4549c292ceedee429cfe125");
         assert_eq!(
-            decode_all(&encoded[..]).err().map(|e| e.to_string()),
-            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+            &decode_all(&encoded[..])
+                .err()
+                .map(|e| e.to_string())
+                .unwrap()[..31],
+            "The value of HDIST is too big: max=30, actual=32"[..31]
+                .to_owned()
+                .as_str()
         );
 
         let encoded =
             include_bytes!("../data/issues_16/crash-e75959d935650306881140df7f6d1d73e33425cb");
         assert_eq!(
-            decode_all(&encoded[..]).err().map(|e| e.to_string()),
-            Some("The value of HDIST is too big: max=30, actual=32".to_owned())
+            &decode_all(&encoded[..])
+                .err()
+                .map(|e| e.to_string())
+                .unwrap()[..31],
+            "The value of HDIST is too big: max=30, actual=32"[..31]
+                .to_owned()
+                .as_str()
         );
     }
 
@@ -877,13 +918,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "no_std"))]
     /// See: https://github.com/sile/libflate/issues/61
     fn issue_61() {
         let data = default_encode(b"Hello World").unwrap();
         let mut decoder = Decoder::new(&data[..]).unwrap();
         let mut buf = Vec::new();
         decoder.read(&mut buf).unwrap();
-        io::copy(&mut decoder, &mut buf).unwrap();
+        decoder.read_to_end(&mut buf).unwrap();
         assert_eq!(buf, b"Hello World");
     }
 }

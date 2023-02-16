@@ -2,8 +2,19 @@
 //!
 //! LZ77 is a compression algorithm used in [DEFLATE](https://tools.ietf.org/html/rfc1951).
 #![warn(missing_docs)]
+#![cfg_attr(no_std, feature = "no_std")]
+
+#[cfg(feature = "no_std")]
+extern crate alloc;
+
 pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
+#[cfg(feature = "no_std")]
+use core2::io;
 use rle_decode_fast::rle_decode;
+#[cfg(not(feature = "no_std"))]
+use std::io;
 
 mod default;
 
@@ -157,7 +168,7 @@ impl Lz77Decoder {
     ///
     /// The decoded bytes are appended to the buffer of [`Lz77Decoder`].
     #[inline]
-    pub fn decode(&mut self, code: Code) -> std::io::Result<()> {
+    pub fn decode(&mut self, code: Code) -> io::Result<()> {
         match code {
             Code::Literal(b) => {
                 self.buffer.push(b);
@@ -167,13 +178,16 @@ impl Lz77Decoder {
                 backward_distance,
             } => {
                 if self.buffer.len() < backward_distance as usize {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        #[cfg(not(feature = "no_std"))]
                         format!(
                             "Too long backword reference: buffer.len={}, distance={}",
                             self.buffer.len(),
                             backward_distance
                         ),
+                        #[cfg(feature = "no_std")]
+                        "Too long backword reference",
                     ));
                 }
                 rle_decode(
@@ -187,10 +201,7 @@ impl Lz77Decoder {
     }
 
     /// Appends the bytes read from `reader` to the buffer of [`Lz77Decoder`].
-    pub fn extend_from_reader<R: std::io::Read>(
-        &mut self,
-        mut reader: R,
-    ) -> std::io::Result<usize> {
+    pub fn extend_from_reader<R: io::Read>(&mut self, mut reader: R) -> io::Result<usize> {
         reader.read_to_end(&mut self.buffer)
     }
 
@@ -227,8 +238,8 @@ impl Lz77Decoder {
     }
 }
 
-impl std::io::Read for Lz77Decoder {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+impl io::Read for Lz77Decoder {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let copy_size = std::cmp::min(buf.len(), self.buffer.len() - self.offset);
         buf[..copy_size].copy_from_slice(&self.buffer[self.offset..][..copy_size]);
         self.offset += copy_size;
@@ -240,6 +251,11 @@ impl std::io::Read for Lz77Decoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "no_std")]
+    use alloc::vec::Vec;
+    #[cfg(feature = "no_std")]
+    use core2::io::Read as _;
+    #[cfg(not(feature = "no_std"))]
     use std::io::Read as _;
 
     #[test]

@@ -4,12 +4,15 @@
 //!
 //! # Examples
 //! ```
-//! use std::io::{self, Read};
+//! #[cfg(feature = "no_std")]
+//! use core2::io::{Read, Write};
+//! #[cfg(not(feature = "no_std"))]
+//! use std::io::{Read, Write};
 //! use libflate::gzip::{Encoder, Decoder};
 //!
 //! // Encoding
 //! let mut encoder = Encoder::new(Vec::new()).unwrap();
-//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! encoder.write_all(b"Hello World!".as_ref()).unwrap();
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
@@ -23,6 +26,11 @@ use crate::checksum;
 use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
+#[cfg(feature = "no_std")]
+use alloc::{ffi::CString, vec::Vec};
+#[cfg(feature = "no_std")]
+use core2::io;
+#[cfg(not(feature = "no_std"))]
 use std::{ffi::CString, io, time};
 
 const GZIP_ID: [u8; 2] = [31, 139];
@@ -141,12 +149,12 @@ impl HeaderBuilder {
     /// ```
     pub fn new() -> Self {
         // wasm-unknown-unknown does not implement the time module
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(all(not(target_arch = "wasm32"), not(feature = "no_std")))]
         let modification_time = time::UNIX_EPOCH
             .elapsed()
             .map(|d| d.as_secs() as u32)
             .unwrap_or(0);
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(any(target_arch = "wasm32", feature = "no_std"))]
         let modification_time = 0;
 
         let header = Header {
@@ -237,6 +245,11 @@ impl HeaderBuilder {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// extern crate alloc;
+    /// #[cfg(feature = "no_std")]
+    /// use alloc::ffi::CString;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::ffi::CString;
     /// use libflate::gzip::HeaderBuilder;
     ///
@@ -252,6 +265,11 @@ impl HeaderBuilder {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// extern crate alloc;
+    /// #[cfg(feature = "no_std")]
+    /// use alloc::ffi::CString;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::ffi::CString;
     /// use libflate::gzip::HeaderBuilder;
     ///
@@ -754,11 +772,14 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(&b"Hello World!"[..]).unwrap();
     /// encoder.finish().into_result().unwrap();
     /// ```
     pub fn new(inner: W) -> io::Result<Self> {
@@ -776,13 +797,16 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::gzip::{Encoder, EncodeOptions, HeaderBuilder};
     ///
     /// let header = HeaderBuilder::new().modification_time(123).finish();
     /// let options = EncodeOptions::new().no_compression().header(header);
     /// let mut encoder = Encoder::with_options(Vec::new(), options).unwrap();
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(&b"Hello World!"[..]).unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
     ///            &[31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255, 72, 101, 108, 108,
@@ -815,11 +839,14 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(&b"Hello World!"[..]).unwrap();
     ///
     /// assert!(encoder.finish().as_result().is_ok())
     /// ```
@@ -830,6 +857,9 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
@@ -837,6 +867,9 @@ where
     /// let plain = b"Hello World!";
     /// let mut buf = Vec::new();
     /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
+    /// #[cfg(feature = "no_std")]
+    /// encoder.write_all(plain.as_ref()).unwrap();
+    /// #[cfg(not(feature = "no_std"))]
     /// io::copy(&mut &plain[..], &mut encoder).unwrap();
     /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
@@ -909,6 +942,9 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Read;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Read;
     /// use libflate::gzip::Decoder;
     ///
@@ -958,6 +994,9 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
     /// use libflate::gzip::Decoder;
     ///
@@ -1040,6 +1079,9 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Read;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Read;
     /// use libflate::gzip::MultiDecoder;
     ///
@@ -1098,6 +1140,9 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
     /// use libflate::gzip::MultiDecoder;
     ///
@@ -1147,25 +1192,28 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
+    #[cfg(feature = "no_std")]
+    use core2::io::{Read, Write};
+    #[cfg(not(feature = "no_std"))]
     use std::io::{self, Read, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
-        io::copy(&mut decoder, &mut buf)?;
+        decoder.read_to_end(&mut buf)?;
         Ok(buf)
     }
 
     fn decode_multi(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = MultiDecoder::new(buf).unwrap();
         let mut buf = Vec::with_capacity(buf.len());
-        io::copy(&mut decoder, &mut buf)?;
+        decoder.read_to_end(&mut buf).unwrap();
         Ok(buf)
     }
 
     fn encode(text: &[u8]) -> io::Result<Vec<u8>> {
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &text[..], &mut encoder).unwrap();
+        encoder.write_all(text).unwrap();
         encoder.finish().into_result()
     }
 
@@ -1173,7 +1221,7 @@ mod tests {
     fn encode_works() {
         let plain = b"Hello World! Hello GZIP!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode(&encoded).unwrap(), plain);
     }
@@ -1184,13 +1232,16 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut encoder = AutoFinish::new(Encoder::new(&mut buf).unwrap());
-            io::copy(&mut &plain[..], &mut encoder).unwrap();
+            encoder.write_all(plain.as_ref()).unwrap();
         }
         assert_eq!(decode(&buf).unwrap(), plain);
     }
 
     #[test]
     fn multi_decode_works() {
+        #[cfg(feature = "no_std")]
+        use core::iter;
+        #[cfg(not(feature = "no_std"))]
         use std::iter;
         let text = b"Hello World!";
         let encoded: Vec<u8> = iter::repeat(encode(text).unwrap())
@@ -1229,7 +1280,7 @@ mod tests {
         let mut decoder = Decoder::new(&data[..]).unwrap();
         let mut buf = Vec::new();
         decoder.read(&mut buf).unwrap();
-        io::copy(&mut decoder, &mut buf).unwrap();
+        decoder.read_to_end(&mut buf).unwrap();
         assert_eq!(buf, b"Hello World");
     }
 
@@ -1249,6 +1300,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "no_std"))]
     fn encode_with_extra_field() {
         let mut buf = Vec::new();
         let extra_field = ExtraField {

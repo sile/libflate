@@ -1,6 +1,15 @@
 use crate::bit;
-use std::cmp;
-use std::io::{self, Read};
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
+#[cfg(feature = "no_std")]
+use core::cmp;
+#[cfg(feature = "no_std")]
+use core2::io::{self, Read};
+#[cfg(not(feature = "no_std"))]
+use std::{
+    cmp,
+    io::{self, Read},
+};
 
 #[derive(Debug)]
 pub struct TransactionalBitReader<R> {

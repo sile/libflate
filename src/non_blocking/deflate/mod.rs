@@ -4,13 +4,16 @@
 //!
 //! # Examples
 //! ```
-//! use std::io::{self, Read};
+//! #[cfg(feature = "no_std")]
+//! use core2::io::{Read, Write};
+//! #[cfg(not(feature = "no_std"))]
+//! use std::io::{Read, Write};
 //! use libflate::deflate::Encoder;
 //! use libflate::non_blocking::deflate::Decoder;
 //!
 //! // Encoding
 //! let mut encoder = Encoder::new(Vec::new());
-//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! encoder.write_all(b"Hello World!".as_ref()).unwrap();
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding

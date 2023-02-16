@@ -3,8 +3,12 @@ use super::BlockType;
 use crate::bit;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
-use std::cmp;
-use std::io;
+#[cfg(feature = "no_std")]
+use core::cmp;
+#[cfg(feature = "no_std")]
+use core2::io;
+#[cfg(not(feature = "no_std"))]
+use std::{cmp, io};
 
 /// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
@@ -142,11 +146,14 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(b"Hello World!".as_ref()).unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
     ///            [5, 192, 49, 13, 0, 0, 8, 3, 65, 43, 224, 6, 7, 24, 128, 237,
@@ -167,12 +174,15 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::deflate::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().no_compression();
     /// let mut encoder = Encoder::with_options(Vec::new(), options);
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(b"Hello World!".as_ref()).unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
     ///            [1, 12, 0, 243, 255, 72, 101, 108, 108, 111, 32, 87, 111,
@@ -189,11 +199,14 @@ where
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Write;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
-    /// encoder.write_all(b"Hello World!").unwrap();
+    /// encoder.write_all(b"Hello World!".as_ref()).unwrap();
     ///
     /// assert_eq!(encoder.finish().into_result().unwrap(),
     ///            [5, 192, 49, 13, 0, 0, 8, 3, 65, 43, 224, 6, 7, 24, 128, 237,
@@ -428,6 +441,9 @@ where
 mod tests {
     use super::super::Decoder;
     use super::*;
+    #[cfg(feature = "no_std")]
+    use core2::io::{Read as _, Write as _};
+    #[cfg(not(feature = "no_std"))]
     use std::io::{Read as _, Write as _};
 
     #[test]

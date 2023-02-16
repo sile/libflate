@@ -4,13 +4,16 @@
 //!
 //! # Examples
 //! ```
-//! use std::io::{self, Read};
+//! #[cfg(feature = "no_std")]
+//! use core2::io::{Read, Write};
+//! #[cfg(not(feature = "no_std"))]
+//! use std::io::{Read, Write};
 //! use libflate::zlib::Encoder;
 //! use libflate::non_blocking::zlib::Decoder;
 //!
 //! // Encoding
 //! let mut encoder = Encoder::new(Vec::new()).unwrap();
-//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! encoder.write_all(b"Hello World!".as_ref()).unwrap();
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
@@ -23,6 +26,9 @@
 use crate::checksum;
 use crate::non_blocking::deflate;
 use crate::zlib::Header;
+#[cfg(feature = "no_std")]
+use core2::io::{self, Read};
+#[cfg(not(feature = "no_std"))]
 use std::io::{self, Read};
 
 /// ZLIB decoder which supports non-blocking I/O.
@@ -40,6 +46,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Read;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Read;
     /// use libflate::non_blocking::zlib::Decoder;
     ///
@@ -102,6 +111,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
     /// use libflate::non_blocking::zlib::Decoder;
     ///
@@ -157,17 +169,22 @@ mod tests {
     use super::*;
     use crate::util::{nb_read_to_end, WouldBlockReader};
     use crate::zlib::{EncodeOptions, Encoder};
-    use std::io;
+    #[cfg(feature = "no_std")]
+    use core2::io::Write;
+    #[cfg(not(feature = "no_std"))]
+    use std::io::Write;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));
         nb_read_to_end(decoder)
     }
+    #[cfg(not(feature = "no_std"))]
     fn default_encode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &buf[..], &mut encoder).unwrap();
+        encoder.write_all(buf.as_ref()).unwrap();
         encoder.finish().into_result()
     }
+    #[cfg(not(feature = "no_std"))]
     macro_rules! assert_encode_decode {
         ($input:expr) => {{
             let encoded = default_encode(&$input[..]).unwrap();
@@ -187,6 +204,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "no_std"))]
     fn default_encode_works() {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -196,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "no_std"))]
     fn best_speed_encode_works() {
         let plain = b"Hello World! Hello ZLIB!!";
         let mut encoder =
@@ -215,7 +234,7 @@ mod tests {
         let plain = b"Hello World!";
         let mut encoder =
             Encoder::with_options(Vec::new(), EncodeOptions::new().no_compression()).unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         let expected = RAW_ENCODE_WORKS_EXPECTED;
         assert_eq!(encoded, expected);
@@ -223,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "no_std"))]
     fn test_issue_2() {
         // See: https://github.com/sile/libflate/issues/2
         assert_encode_decode!([

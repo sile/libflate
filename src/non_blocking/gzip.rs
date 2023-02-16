@@ -4,13 +4,16 @@
 //!
 //! # Examples
 //! ```
-//! use std::io::{self, Read};
+//! #[cfg(feature = "no_std")]
+//! use core2::io::{Read, Write};
+//! #[cfg(not(feature = "no_std"))]
+//! use std::io::{Read, Write};
 //! use libflate::gzip::Encoder;
 //! use libflate::non_blocking::gzip::Decoder;
 //!
 //! // Encoding
 //! let mut encoder = Encoder::new(Vec::new()).unwrap();
-//! io::copy(&mut &b"Hello World!"[..], &mut encoder).unwrap();
+//! encoder.write_all(&b"Hello World!".as_ref()).unwrap();
 //! let encoded_data = encoder.finish().into_result().unwrap();
 //!
 //! // Decoding
@@ -23,6 +26,9 @@
 use crate::checksum;
 use crate::gzip::{Header, Trailer};
 use crate::non_blocking::deflate;
+#[cfg(feature = "no_std")]
+use core2::io::{self, Read};
+#[cfg(not(feature = "no_std"))]
 use std::io::{self, Read};
 
 /// GZIP decoder which supports non-blocking I/O.
@@ -40,6 +46,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Read;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Read;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
@@ -103,6 +112,9 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
+    /// #[cfg(feature = "no_std")]
+    /// use core2::io::Cursor;
+    /// #[cfg(not(feature = "no_std"))]
     /// use std::io::Cursor;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
@@ -157,7 +169,10 @@ mod tests {
     use super::*;
     use crate::gzip::Encoder;
     use crate::util::{nb_read_to_end, WouldBlockReader};
-    use std::io;
+    #[cfg(feature = "no_std")]
+    use core2::io::Write;
+    #[cfg(not(feature = "no_std"))]
+    use std::io::Write;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));
@@ -168,7 +183,7 @@ mod tests {
     fn encode_works() {
         let plain = b"Hello World! Hello GZIP!!";
         let mut encoder = Encoder::new(Vec::new()).unwrap();
-        io::copy(&mut &plain[..], &mut encoder).unwrap();
+        encoder.write_all(plain.as_ref()).unwrap();
         let encoded = encoder.finish().into_result().unwrap();
         assert_eq!(decode_all(&encoded).unwrap(), plain);
     }

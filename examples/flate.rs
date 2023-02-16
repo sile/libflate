@@ -1,17 +1,31 @@
 extern crate clap;
 extern crate libflate;
 
+#[cfg(not(feature = "no_std"))]
 use clap::App;
+#[cfg(not(feature = "no_std"))]
 use clap::Arg;
+#[cfg(not(feature = "no_std"))]
 use clap::SubCommand;
+#[cfg(not(feature = "no_std"))]
 use libflate::gzip;
+#[cfg(not(feature = "no_std"))]
 use libflate::zlib;
+#[cfg(not(feature = "no_std"))]
 use std::fs;
+#[cfg(not(feature = "no_std"))]
 use std::io;
+#[cfg(not(feature = "no_std"))]
 use std::io::Read;
+#[cfg(not(feature = "no_std"))]
 use std::io::Write;
+#[cfg(not(feature = "no_std"))]
 use std::process;
 
+#[cfg(feature = "no_std")]
+fn main() {}
+
+#[cfg(not(feature = "no_std"))]
 fn main() {
     let matches = App::new("deflate")
         .arg(

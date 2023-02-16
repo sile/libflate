@@ -17,7 +17,11 @@ coveralls = {repository = "sile/libflate"}
 [dependencies]
 adler32 = "1"
 crc32fast = "1.1.1"
-libflate_lz77 = { path = "libflate_lz77", version = "1.1" }
+libflate_lz77 = { path = "libflate_lz77", version = "1.1", default_features = false }
+core2 = { version = "0.4", default_features = false, features = ["alloc"], optional = true }
+
+[features]
+no_std = ["libflate_lz77/no_std", "core2"]
 
 [dev-dependencies]
 clap = "2"

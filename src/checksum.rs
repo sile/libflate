@@ -1,4 +1,7 @@
 use adler32::RollingAdler32;
+#[cfg(feature = "no_std")]
+use core::fmt;
+#[cfg(not(feature = "no_std"))]
 use std::fmt;
 
 pub struct Adler32(RollingAdler32);
