@@ -72,6 +72,13 @@ where
         self.bit_reader.into_inner()
     }
 
+    /// Returns the data that has been decoded but has not yet been read.
+    ///
+    /// This method is useful to retrieve partial decoded data when the decoding process is failed.
+    pub fn unread_decoded_data(&self) -> &[u8] {
+        self.lz77_decoder.buffer()
+    }
+
     pub(crate) fn reset(&mut self) {
         self.bit_reader.reset();
         self.lz77_decoder.clear();

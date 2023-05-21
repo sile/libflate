@@ -1011,6 +1011,13 @@ where
         self.reader.into_inner()
     }
 
+    /// Returns the data that has been decoded but has not yet been read.
+    ///
+    /// This method is useful to retrieve partial decoded data when the decoding process is failed.
+    pub fn unread_decoded_data(&self) -> &[u8] {
+        self.reader.unread_decoded_data()
+    }
+
     fn with_header(inner: R, header: Header) -> Self {
         Decoder {
             header,
