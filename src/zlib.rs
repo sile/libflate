@@ -374,6 +374,13 @@ where
     pub fn into_inner(self) -> R {
         self.reader.into_inner()
     }
+
+    /// Returns the data that has been decoded but has not yet been read.
+    ///
+    /// This method is useful to retrieve partial decoded data when the decoding process is failed.
+    pub fn unread_decoded_data(&self) -> &[u8] {
+        self.reader.unread_decoded_data()
+    }
 }
 impl<R> io::Read for Decoder<R>
 where
@@ -927,5 +934,24 @@ mod tests {
         decoder.read(&mut buf).unwrap();
         decoder.read_to_end(&mut buf).unwrap();
         assert_eq!(buf, b"Hello World");
+    }
+
+    #[test]
+    fn issue71() {
+        let encoded_data = [
+            120, 218, 251, 255, 207, 144, 193, 138, 193, 151, 161, 146, 33, 143, 33, 149, 161, 156,
+            161, 24, 72, 38, 51, 148, 48, 100, 50, 228, 3, 69, 120, 25, 184, 24,
+        ];
+
+        let mut decoder = Decoder::new(&encoded_data[..]).unwrap();
+        let mut buf = Vec::new();
+        let result = decoder.read_to_end(&mut buf);
+        assert!(result.is_err());
+
+        let decoded_data = [
+            255, 254, 49, 0, 58, 0, 77, 0, 121, 0, 110, 0, 101, 0, 119, 0, 115, 0, 101, 0, 99, 0,
+            116, 0, 105, 0, 111, 0, 110, 0, 13, 0, 10,
+        ];
+        assert_eq!(decoder.unread_decoded_data(), decoded_data);
     }
 }
