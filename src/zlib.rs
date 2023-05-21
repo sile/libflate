@@ -947,11 +947,12 @@ mod tests {
         let mut buf = Vec::new();
         let result = decoder.read_to_end(&mut buf);
         assert!(result.is_err());
+        buf.extend_from_slice(decoder.unread_decoded_data());
 
         let decoded_data = [
             255, 254, 49, 0, 58, 0, 77, 0, 121, 0, 110, 0, 101, 0, 119, 0, 115, 0, 101, 0, 99, 0,
             116, 0, 105, 0, 111, 0, 110, 0, 13, 0, 10,
         ];
-        assert_eq!(decoder.unread_decoded_data(), decoded_data);
+        assert_eq!(buf, decoded_data);
     }
 }
