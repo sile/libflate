@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 
 [dependencies]
-clap = "*"
+clap = "3"
 flate2 = "*"
 inflate = "*"
 libflate = {path = "../"}
