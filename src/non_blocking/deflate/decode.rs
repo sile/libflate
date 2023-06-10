@@ -1,16 +1,8 @@
 use crate::deflate::symbol::{self, HuffmanCodec};
 use crate::lz77;
 use crate::non_blocking::transaction::TransactionalBitReader;
-#[cfg(feature = "no_std")]
 use core::cmp;
-#[cfg(feature = "no_std")]
 use core2::io::{self, Read};
-#[cfg(not(feature = "no_std"))]
-use std::{
-    cmp,
-    io::{self, Read},
-};
-
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
 pub struct Decoder<R> {
@@ -26,10 +18,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::{Cursor, Read};
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::{Cursor, Read};
     /// use libflate::non_blocking::deflate::Decoder;
     ///
     /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
@@ -62,10 +51,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
     /// use libflate::non_blocking::deflate::Decoder;
     ///
     /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
@@ -255,10 +241,8 @@ mod tests {
     use super::*;
     use crate::deflate::{EncodeOptions, Encoder};
     use crate::util::{nb_read_to_end, WouldBlockReader};
-    #[cfg(feature = "no_std")]
+    use alloc::{format, string::String, vec::Vec};
     use core2::io::{Read, Write};
-    #[cfg(not(feature = "no_std"))]
-    use std::io::{Read, Write};
 
     #[test]
     fn it_works() {

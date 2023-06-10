@@ -1,13 +1,13 @@
 [package]
 name = "libflate"
-version = "1.4.0"
+version = "2.0.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
 description = "A Rust implementation of DEFLATE algorithm and related formats (ZLIB, GZIP)"
 homepage = "https://github.com/sile/libflate"
 repository = "https://github.com/sile/libflate"
 readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
-categories = ["compression"]
+categories = ["compression", "no-std"]
 license = "MIT"
 edition = "2018"
 
@@ -15,13 +15,15 @@ edition = "2018"
 coveralls = {repository = "sile/libflate"}
 
 [dependencies]
-adler32 = "1"
-crc32fast = "1.1.1"
-libflate_lz77 = { path = "libflate_lz77", version = "1.1", default_features = false }
-core2 = { version = "0.4", default_features = false, features = ["alloc"], optional = true }
+adler32 = { version = "1", default-features = false }
+crc32fast = { version = "1.1.1", default-features = false }
+dary_heap = "0.3.5"
+libflate_lz77 = { path = "libflate_lz77", version = "2.0.0", default-features = false }
+core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 
 [features]
-no_std = ["libflate_lz77/no_std", "core2"]
+default = ["std"]
+std = ["libflate_lz77/std", "core2/std"]
 
 [dev-dependencies]
 clap = "2"

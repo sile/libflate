@@ -4,9 +4,6 @@
 //!
 //! # Examples
 //! ```
-//! #[cfg(not(feature = "no_std"))]
-//! use std::io::{Read, Write};
-//! #[cfg(feature = "no_std")]
 //! use core2::io::{Read, Write};
 //! use libflate::zlib::{Encoder, Decoder};
 //!
@@ -26,10 +23,7 @@ use crate::checksum;
 use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
-#[cfg(feature = "no_std")]
 use core2::io;
-#[cfg(not(feature = "no_std"))]
-use std::io;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
@@ -230,7 +224,7 @@ impl Header {
     {
         let mut buf = [0; 2];
         reader.read_exact(&mut buf)?;
-        let (cmf, flg) = (buf[0], buf[1]);
+        let [cmf, flg] = buf;
         let check = (u16::from(cmf) << 8) + u16::from(flg);
         if check % 31 != 0 {
             return Err(invalid_data_error!(
@@ -303,9 +297,6 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Read;
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Read;
     /// use libflate::zlib::Decoder;
     ///
@@ -359,9 +350,6 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
     /// use libflate::zlib::Decoder;
     ///
@@ -547,9 +535,9 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(not(feature = "no_std"))]
+    /// #[cfg(feature = "std")]
     /// use std::io::Write;
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// use core2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
@@ -575,9 +563,6 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
     /// use libflate::zlib::{Encoder, EncodeOptions};
     ///
@@ -616,9 +601,6 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
@@ -636,10 +618,7 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::zlib::Encoder;
     ///
@@ -705,10 +684,8 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
-    #[cfg(feature = "no_std")]
+    use alloc::{borrow::ToOwned, string::ToString, vec, vec::Vec};
     use core2::io::{Read as _, Write as _};
-    #[cfg(not(feature = "no_std"))]
-    use std::io::{Read as _, Write as _};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -925,7 +902,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     /// See: https://github.com/sile/libflate/issues/61
     fn issue_61() {
         let data = default_encode(b"Hello World").unwrap();

@@ -7,6 +7,7 @@ pub use libflate_lz77::*;
 mod tests {
     use super::*;
     use crate::deflate::symbol::Symbol;
+    use alloc::{vec, vec::Vec};
 
     #[test]
     // See: https://github.com/sile/libflate/issues/21

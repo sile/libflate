@@ -1,13 +1,8 @@
 //! Length-limited Huffman Codes.
 use crate::bit;
-#[cfg(feature = "no_std")]
-use alloc::vec::Vec;
-#[cfg(feature = "no_std")]
+use alloc::{vec, vec::Vec};
 use core::cmp;
-#[cfg(feature = "no_std")]
 use core2::io;
-#[cfg(not(feature = "no_std"))]
-use std::{cmp, io};
 
 const MAX_BITWIDTH: u8 = 15;
 
@@ -112,12 +107,12 @@ impl Builder for DecoderBuilder {
         for padding in 0..(1 << (self.max_bitwidth - code.width)) {
             let i = ((padding << code.width) | code_be.bits) as usize;
             if self.table[i] != u16::from(MAX_BITWIDTH) + 1 {
-                #[cfg(not(feature = "no_std"))]
+                #[cfg(feature = "std")]
                 let message = format!(
                     "Bit region conflict: i={}, old_value={}, new_value={}, symbol={}, code={:?}",
                     i, self.table[i], value, symbol, code
                 );
-                #[cfg(feature = "no_std")]
+                #[cfg(not(feature = "std"))]
                 let message = "Bit region conflict";
                 return Err(io::Error::new(io::ErrorKind::InvalidData, message));
             }
@@ -128,7 +123,7 @@ impl Builder for DecoderBuilder {
     fn finish(self) -> Self::Instance {
         Decoder {
             table: self.table,
-            safely_peek_bitwidth: std::cmp::min(
+            safely_peek_bitwidth: cmp::min(
                 self.max_bitwidth,
                 self.safely_peek_bitwidth.unwrap_or(1),
             ),
@@ -261,8 +256,8 @@ impl Encoder {
 
 #[allow(dead_code)]
 mod ordinary_huffman_codes {
-    use std::cmp;
-    use std::collections::BinaryHeap;
+    use core::cmp;
+    use dary_heap::BinaryHeap;
 
     pub fn calc_optimal_max_bitwidth(frequencies: &[usize]) -> u8 {
         let mut heap = BinaryHeap::new();
@@ -280,7 +275,8 @@ mod ordinary_huffman_codes {
     }
 }
 mod length_limited_huffman_codes {
-    use std::mem;
+    use alloc::{vec, vec::Vec};
+    use core::mem;
 
     #[derive(Debug, Clone)]
     struct Node {

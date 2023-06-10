@@ -1,32 +1,24 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate clap;
 extern crate libflate;
 
-#[cfg(not(feature = "no_std"))]
-use clap::App;
-#[cfg(not(feature = "no_std"))]
-use clap::Arg;
-#[cfg(not(feature = "no_std"))]
-use clap::SubCommand;
-#[cfg(not(feature = "no_std"))]
-use libflate::gzip;
-#[cfg(not(feature = "no_std"))]
-use libflate::zlib;
-#[cfg(not(feature = "no_std"))]
-use std::fs;
-#[cfg(not(feature = "no_std"))]
-use std::io;
-#[cfg(not(feature = "no_std"))]
-use std::io::Read;
-#[cfg(not(feature = "no_std"))]
-use std::io::Write;
-#[cfg(not(feature = "no_std"))]
-use std::process;
-
-#[cfg(feature = "no_std")]
+#[cfg(not(feature = "std"))]
 fn main() {}
 
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 fn main() {
+    use clap::App;
+    use clap::Arg;
+    use clap::SubCommand;
+    use libflate::gzip;
+    use libflate::zlib;
+    use std::fs;
+    use std::io;
+    use std::io::Read;
+    use std::io::Write;
+    use std::process;
+
     let matches = App::new("deflate")
         .arg(
             Arg::with_name("INPUT")

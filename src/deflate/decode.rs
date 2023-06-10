@@ -1,10 +1,7 @@
 use super::symbol;
 use crate::bit;
 use crate::lz77;
-#[cfg(feature = "no_std")]
 use core2::io::{self, Read};
-#[cfg(not(feature = "no_std"))]
-use std::io::{self, Read};
 
 /// DEFLATE decoder.
 #[derive(Debug)]
@@ -23,10 +20,9 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
+    /// # extern crate alloc;
+    /// # use alloc::vec::Vec;
     /// use core2::io::{Cursor, Read};
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::{Cursor, Read};
     /// use libflate::deflate::Decoder;
     ///
     /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
@@ -58,10 +54,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
     /// use libflate::deflate::Decoder;
     ///
     /// let encoded_data = [243, 72, 205, 201, 201, 87, 8, 207, 47, 202, 73, 81, 4, 0];
@@ -105,9 +98,9 @@ where
                     if used != len.into() {
                         Err(io::Error::new(
                             io::ErrorKind::UnexpectedEof,
-                            #[cfg(not(feature = "no_std"))]
+                            #[cfg(feature = "std")]
                             format!("The reader has incorrect length: expected {len}, read {used}"),
-                            #[cfg(feature = "no_std")]
+                            #[cfg(not(feature = "std"))]
                             "The reader has incorrect length",
                         ))
                     } else {
@@ -173,10 +166,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     use super::*;
     use crate::deflate::symbol::{DynamicHuffmanCodec, HuffmanCodec};
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     use std::io;
 
     #[test]
@@ -197,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn it_works() {
         let input = [
             180, 253, 73, 143, 28, 201, 150, 46, 8, 254, 150, 184, 139, 75, 18, 69, 247, 32, 157,
@@ -219,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn test_issue_64() {
         let input = b"\x04\x04\x04\x05:\x1az*\xfc\x06\x01\x90\x01\x06\x01";
         let mut decoder = Decoder::new(&input[..]);

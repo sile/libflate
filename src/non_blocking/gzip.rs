@@ -4,10 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! #[cfg(feature = "no_std")]
 //! use core2::io::{Read, Write};
-//! #[cfg(not(feature = "no_std"))]
-//! use std::io::{Read, Write};
 //! use libflate::gzip::Encoder;
 //! use libflate::non_blocking::gzip::Decoder;
 //!
@@ -26,10 +23,7 @@
 use crate::checksum;
 use crate::gzip::{Header, Trailer};
 use crate::non_blocking::deflate;
-#[cfg(feature = "no_std")]
 use core2::io::{self, Read};
-#[cfg(not(feature = "no_std"))]
-use std::io::{self, Read};
 
 /// GZIP decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -46,10 +40,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Read;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Read;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -112,10 +103,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -169,10 +157,7 @@ mod tests {
     use super::*;
     use crate::gzip::Encoder;
     use crate::util::{nb_read_to_end, WouldBlockReader};
-    #[cfg(feature = "no_std")]
     use core2::io::Write;
-    #[cfg(not(feature = "no_std"))]
-    use std::io::Write;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

@@ -1,14 +1,7 @@
 //! `Finish` and related types.
 
-#[cfg(feature = "no_std")]
 use core::ops::{Deref, DerefMut};
-#[cfg(feature = "no_std")]
 use core2::io::{self, Write};
-#[cfg(not(feature = "no_std"))]
-use std::{
-    io::{self, Write},
-    ops::{Deref, DerefMut},
-};
 
 /// `Finish` is a type that represents a value which
 /// may have an error occurred during the computation.
@@ -112,10 +105,7 @@ impl<T: Complete> AutoFinish<T> {
     /// # Examples
     ///
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::finish::AutoFinish;
     /// use libflate::gzip::Encoder;
     ///
@@ -177,10 +167,7 @@ impl<T: Complete> AutoFinishUnchecked<T> {
     /// # Examples
     ///
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
     ///

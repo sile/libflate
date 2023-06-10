@@ -3,12 +3,9 @@ use super::BlockType;
 use crate::bit;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
-#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
 use core::cmp;
-#[cfg(feature = "no_std")]
 use core2::io;
-#[cfg(not(feature = "no_std"))]
-use std::{cmp, io};
 
 /// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
@@ -146,10 +143,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
@@ -174,10 +168,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::deflate::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().no_compression();
@@ -199,10 +190,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
@@ -441,10 +429,7 @@ where
 mod tests {
     use super::super::Decoder;
     use super::*;
-    #[cfg(feature = "no_std")]
     use core2::io::{Read as _, Write as _};
-    #[cfg(not(feature = "no_std"))]
-    use std::io::{Read as _, Write as _};
 
     #[test]
     fn test_issues_52() {
@@ -485,6 +470,7 @@ mod tests {
             encoder.flush().expect("Flush failed");
         }
         let finished = encoder.finish().unwrap();
+        #[cfg(feature = "std")]
         println!("{:?}", finished.0);
 
         let mut output = Vec::new();

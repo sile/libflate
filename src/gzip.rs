@@ -4,10 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! #[cfg(feature = "no_std")]
 //! use core2::io::{Read, Write};
-//! #[cfg(not(feature = "no_std"))]
-//! use std::io::{Read, Write};
 //! use libflate::gzip::{Encoder, Decoder};
 //!
 //! // Encoding
@@ -26,12 +23,10 @@ use crate::checksum;
 use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
-#[cfg(feature = "no_std")]
 use alloc::{ffi::CString, vec::Vec};
-#[cfg(feature = "no_std")]
 use core2::io;
-#[cfg(not(feature = "no_std"))]
-use std::{ffi::CString, io, time};
+#[cfg(feature = "std")]
+use std::time;
 
 const GZIP_ID: [u8; 2] = [31, 139];
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
@@ -149,12 +144,12 @@ impl HeaderBuilder {
     /// ```
     pub fn new() -> Self {
         // wasm-unknown-unknown does not implement the time module
-        #[cfg(all(not(target_arch = "wasm32"), not(feature = "no_std")))]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "std"))]
         let modification_time = time::UNIX_EPOCH
             .elapsed()
             .map(|d| d.as_secs() as u32)
             .unwrap_or(0);
-        #[cfg(any(target_arch = "wasm32", feature = "no_std"))]
+        #[cfg(any(target_arch = "wasm32", not(feature = "std")))]
         let modification_time = 0;
 
         let header = Header {
@@ -245,11 +240,11 @@ impl HeaderBuilder {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// extern crate alloc;
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// use alloc::ffi::CString;
-    /// #[cfg(not(feature = "no_std"))]
+    /// #[cfg(feature = "std")]
     /// use std::ffi::CString;
     /// use libflate::gzip::HeaderBuilder;
     ///
@@ -265,11 +260,11 @@ impl HeaderBuilder {
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// extern crate alloc;
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// use alloc::ffi::CString;
-    /// #[cfg(not(feature = "no_std"))]
+    /// #[cfg(feature = "std")]
     /// use std::ffi::CString;
     /// use libflate::gzip::HeaderBuilder;
     ///
@@ -772,10 +767,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -797,10 +789,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::gzip::{Encoder, EncodeOptions, HeaderBuilder};
     ///
     /// let header = HeaderBuilder::new().modification_time(123).finish();
@@ -839,10 +828,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -857,20 +843,17 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Write;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
     ///
     /// let plain = b"Hello World!";
     /// let mut buf = Vec::new();
     /// let mut encoder = AutoFinishUnchecked::new(Encoder::new(&mut buf).unwrap());
-    /// #[cfg(feature = "no_std")]
+    /// #[cfg(not(feature = "std"))]
     /// encoder.write_all(plain.as_ref()).unwrap();
-    /// #[cfg(not(feature = "no_std"))]
-    /// io::copy(&mut &plain[..], &mut encoder).unwrap();
+    /// #[cfg(feature = "std")]
+    /// std::io::copy(&mut &plain[..], &mut encoder).unwrap();
     /// ```
     pub fn finish(self) -> Finish<W, io::Error> {
         let trailer = Trailer {
@@ -942,10 +925,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Read;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Read;
     /// use libflate::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -994,10 +974,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
     /// use libflate::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -1086,10 +1063,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Read;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Read;
     /// use libflate::gzip::MultiDecoder;
     ///
     /// let mut encoded_data = Vec::new();
@@ -1147,10 +1121,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// #[cfg(feature = "no_std")]
     /// use core2::io::Cursor;
-    /// #[cfg(not(feature = "no_std"))]
-    /// use std::io::Cursor;
     /// use libflate::gzip::MultiDecoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -1199,10 +1170,8 @@ where
 mod tests {
     use super::*;
     use crate::finish::AutoFinish;
-    #[cfg(feature = "no_std")]
+    use alloc::{vec, vec::Vec};
     use core2::io::{Read, Write};
-    #[cfg(not(feature = "no_std"))]
-    use std::io::{self, Read, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();
@@ -1246,10 +1215,7 @@ mod tests {
 
     #[test]
     fn multi_decode_works() {
-        #[cfg(feature = "no_std")]
         use core::iter;
-        #[cfg(not(feature = "no_std"))]
-        use std::iter;
         let text = b"Hello World!";
         let encoded: Vec<u8> = iter::repeat(encode(text).unwrap())
             .take(2)
@@ -1307,8 +1273,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "no_std"))]
+    #[cfg(feature = "std")]
     fn encode_with_extra_field() {
+        use std::io;
+
         let mut buf = Vec::new();
         let extra_field = ExtraField {
             subfields: vec![ExtraSubField {
