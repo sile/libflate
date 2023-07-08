@@ -20,8 +20,8 @@ core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 hashbrown = { version = "0.13" }
 
 [dev-dependencies]
-libflate = { path = "../", version = "2.0", default-features = false }
+libflate = { path = "../", default-features = false }
 
 [features]
 default = ["std"]
-std = ["core2/std", "libflate/std"]
+std = ["core2/std"]
