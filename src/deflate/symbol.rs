@@ -2,12 +2,9 @@ use crate::bit;
 use crate::huffman;
 use crate::huffman::Builder;
 use crate::lz77;
-#[cfg(feature = "no_std")]
+use alloc::{boxed::Box, vec::Vec};
 use core::{cmp, iter, ops::Range};
-#[cfg(feature = "no_std")]
 use core2::io;
-#[cfg(not(feature = "no_std"))]
-use std::{cmp, io, iter, ops::Range};
 
 const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
     (8, 000..144, 0b0_0011_0000),
@@ -217,9 +214,9 @@ impl Decoder {
             0..=255 => Symbol::Code(lz77::Code::Literal(decoded as u8)),
             256 => Symbol::EndOfBlock,
             286 | 287 => {
-                #[cfg(not(feature = "no_std"))]
+                #[cfg(feature = "std")]
                 let message = format!("The value {decoded} must not occur in compressed data");
-                #[cfg(feature = "no_std")]
+                #[cfg(not(feature = "std"))]
                 let message = "The value(s) [286, 287] must not occur in compressed data";
                 reader.set_last_error(io::Error::new(io::ErrorKind::InvalidData, message));
                 Symbol::EndOfBlock // dummy value
@@ -396,11 +393,11 @@ impl HuffmanCodec for DynamicHuffmanCodec {
         let bitwidth_code_count = reader.read_bits(4)? + 4;
 
         if distance_code_count as usize > MAX_DISTANCE_CODE_COUNT {
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             let message = format!(
                 "The value of HDIST is too big: max={MAX_DISTANCE_CODE_COUNT}, actual={distance_code_count}"
             );
-            #[cfg(feature = "no_std")]
+            #[cfg(not(feature = "std"))]
             let message = "The value of HDIST is too big: max={MAX_DISTANCE_CODE_COUNT}";
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }
@@ -434,13 +431,13 @@ impl HuffmanCodec for DynamicHuffmanCodec {
             distance_code_bitwidthes.extend(load_bitwidthes(reader, c, last)?);
         }
         if distance_code_bitwidthes.len() > distance_code_count as usize {
-            #[cfg(not(feature = "no_std"))]
+            #[cfg(feature = "std")]
             let message = format!(
                 "The length of `distance_code_bitwidthes` is too large: actual={}, expected={}",
                 distance_code_bitwidthes.len(),
                 distance_code_count
             );
-            #[cfg(feature = "no_std")]
+            #[cfg(not(feature = "std"))]
             let message = "The length of `distance_code_bitwidthes` is too large";
             return Err(io::Error::new(io::ErrorKind::InvalidData, message));
         }

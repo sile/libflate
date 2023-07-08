@@ -4,10 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! #[cfg(feature = "no_std")]
 //! use core2::io::{Read, Write};
-//! #[cfg(not(feature = "no_std"))]
-//! use std::io::{Read, Write};
 //! use libflate::deflate::Encoder;
 //! use libflate::non_blocking::deflate::Decoder;
 //!

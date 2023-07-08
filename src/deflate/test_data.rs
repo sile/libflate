@@ -1,5 +1,4 @@
-// Seperate module for large regression test data, to keep the test code readable.
-//
+//! Seperate module for large regression test data, to keep the test code readable.
 
 pub const ISSUE_52_INPUT: [u8; 16_052] = [
     80, 80, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 54, 56, 50, 49, 53, 56, 48, 48, 48, 48,

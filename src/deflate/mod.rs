@@ -4,10 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! #[cfg(feature = "no_std")]
 //! use core2::io::{Read, Write};
-//! #[cfg(not(feature = "no_std"))]
-//! use std::io::{Read, Write};
 //! use libflate::deflate::{Encoder, Decoder};
 //!
 //! // Encoding
@@ -45,10 +42,7 @@ enum BlockType {
 mod tests {
     use super::*;
     use crate::lz77;
-    #[cfg(feature = "no_std")]
     use core2::io::{Read, Write};
-    #[cfg(not(feature = "no_std"))]
-    use std::io::{Read, Write};
 
     #[test]
     fn encode_and_decode_works() {
