@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
 categories = ["compression", "no-std"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 
 [badges]
 coveralls = {repository = "sile/libflate"}
