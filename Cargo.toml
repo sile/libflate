@@ -26,7 +26,7 @@ default = ["std"]
 std = ["libflate_lz77/std", "core2/std"]
 
 [dev-dependencies]
-clap = "2"
+clap = { version = "4", features = ["derive"] }
 
 [workspace]
 members = ["libflate_lz77"]
