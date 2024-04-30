@@ -1,24 +1,27 @@
-extern crate clap;
-extern crate flate2;
-extern crate inflate;
-extern crate libflate;
-
+use clap::Parser;
 use std::fs;
 use std::io;
 use std::io::Read;
 use std::time;
-use clap::App;
-use clap::Arg;
+
+#[derive(Parser)]
+struct Args {
+    #[clap(short, long)]
+    disable_flate2: bool,
+
+    #[clap(short, long)]
+    disable_inflate: bool,
+
+    #[clap(short, long)]
+    disable_libflate: bool,
+
+    input: String,
+}
 
 fn main() {
-    let matches = App::new("flate_bench")
-        .arg(Arg::with_name("INPUT").index(1).required(true))
-        .arg(Arg::with_name("DISABLE_FLATE2").long("disable-flate2"))
-        .arg(Arg::with_name("DISABLE_INFLATE").long("disable-inflate"))
-        .arg(Arg::with_name("DISABLE_LIBFLATE").long("disable-libflate"))
-        .get_matches();
+    let args = Args::parse();
 
-    let input_file_path = matches.value_of("INPUT").unwrap();
+    let input_file_path = &args.input;
     let mut plain = Vec::new();
     fs::File::open(input_file_path)
         .unwrap()
@@ -27,14 +30,14 @@ fn main() {
 
     println!("");
     println!("# ENCODE (input_size={})", plain.len());
-    if !matches.is_present("DISABLE_LIBFLATE") {
+    if !args.disable_libflate {
         bench(
             "- libflate",
             &plain[..],
             libflate::deflate::Encoder::new(BenchWriter::new()),
         );
     }
-    if !matches.is_present("DISABLE_FLATE2") {
+    if !args.disable_flate2 {
         bench(
             "-   flate2",
             &plain[..],
@@ -51,7 +54,7 @@ fn main() {
         writer.finish().unwrap()
     };
     println!("# DECODE (input_size={})", compressed.len());
-    if !matches.is_present("DISABLE_LIBFLATE") {
+    if !args.disable_libflate {
         bench(
             "-                libflate",
             libflate::deflate::Decoder::new(&compressed[..]),
@@ -63,14 +66,14 @@ fn main() {
             BenchWriter::new(),
         );
     }
-    if !matches.is_present("DISABLE_FLATE2") {
+    if !args.disable_flate2 {
         bench(
             "-                  flate2",
             flate2::read::DeflateDecoder::new(&compressed[..]),
             BenchWriter::new(),
         );
     }
-    if !matches.is_present("DISABLE_INFLATE") {
+    if !args.disable_inflate {
         bench(
             "-                 inflate",
             InflateReader::new(&compressed[..]),
@@ -174,7 +177,8 @@ where
             return Ok(len);
         }
         let size = {
-            let (size, output) = self.inflate
+            let (size, output) = self
+                .inflate
                 .update(&self.input_buf[self.input_offset..])
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             self.input_offset += size;

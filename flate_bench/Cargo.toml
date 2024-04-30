@@ -2,9 +2,10 @@
 name = "flate_bench"
 version = "0.1.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
+edition = "2021"
 
 [dependencies]
-clap = "3"
+clap = { version = "4", features = ["derive"] }
 flate2 = "*"
 inflate = "*"
 libflate = {path = "../"}
