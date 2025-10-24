@@ -469,15 +469,15 @@ where
         16 => {
             let count = reader.read_bits(2)? + 3;
             let last = last.ok_or_else(|| invalid_data_error!("No preceding value"))?;
-            Box::new(std::iter::repeat_n(last, count as usize))
+            Box::new(iter::repeat_n(last, count as usize))
         }
         17 => {
             let zeros = reader.read_bits(3)? + 3;
-            Box::new(std::iter::repeat_n(0, zeros as usize))
+            Box::new(iter::repeat_n(0, zeros as usize))
         }
         18 => {
             let zeros = reader.read_bits(7)? + 11;
-            Box::new(std::iter::repeat_n(0, zeros as usize))
+            Box::new(iter::repeat_n(0, zeros as usize))
         }
         _ => unreachable!(),
     })
