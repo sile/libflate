@@ -31,3 +31,7 @@ clap = { version = "4", features = ["derive"] }
 [workspace]
 members = ["libflate_lz77"]
 exclude = ["flate_bench"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+

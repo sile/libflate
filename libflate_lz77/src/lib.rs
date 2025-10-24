@@ -62,7 +62,7 @@ pub trait Sink {
     /// Consumes a LZ77 encoded `Code`.
     fn consume(&mut self, code: Code);
 }
-impl<'a, T> Sink for &'a mut T
+impl<T> Sink for &mut T
 where
     T: Sink,
 {
