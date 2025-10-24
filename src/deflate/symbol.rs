@@ -469,15 +469,15 @@ where
         16 => {
             let count = reader.read_bits(2)? + 3;
             let last = last.ok_or_else(|| invalid_data_error!("No preceding value"))?;
-            Box::new(iter::repeat(last).take(count as usize))
+            Box::new(std::iter::repeat_n(last, count as usize))
         }
         17 => {
             let zeros = reader.read_bits(3)? + 3;
-            Box::new(iter::repeat(0).take(zeros as usize))
+            Box::new(std::iter::repeat_n(0, zeros as usize))
         }
         18 => {
             let zeros = reader.read_bits(7)? + 11;
-            Box::new(iter::repeat(0).take(zeros as usize))
+            Box::new(std::iter::repeat_n(0, zeros as usize))
         }
         _ => unreachable!(),
     })
@@ -499,7 +499,7 @@ fn build_bitwidth_codes(
         (&codec.distance, distance_code_count),
     ] {
         for (i, c) in (0..size).map(|x| e.lookup(x).width).enumerate() {
-            if i > 0 && run_lens.last().map_or(false, |s| s.value == c) {
+            if i > 0 && run_lens.last().is_some_and(|s| s.value == c) {
                 run_lens.last_mut().unwrap().count += 1;
             } else {
                 run_lens.push(RunLength { value: c, count: 1 })

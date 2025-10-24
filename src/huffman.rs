@@ -194,7 +194,7 @@ impl EncoderBuilder {
             .iter()
             .enumerate()
             .filter(|e| *e.1 > 0)
-            .last()
+            .next_back()
             .map_or(0, |e| e.0)
             + 1;
         let builder = Self::new(symbol_count);
