@@ -11,9 +11,6 @@ categories = ["compression", "no-std"]
 license = "MIT"
 edition = "2021"
 
-[badges]
-coveralls = {repository = "sile/libflate"}
-
 [dependencies]
 adler32 = { version = "1", default-features = false }
 crc32fast = { version = "1.1.1", default-features = false }

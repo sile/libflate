@@ -11,9 +11,6 @@ keywords = ["lz77"]
 categories = ["compression"]
 license = "MIT"
 
-[badges]
-coveralls = {repository = "sile/libflate"}
-
 [dependencies]
 rle-decode-fast = "1.0.0"
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
