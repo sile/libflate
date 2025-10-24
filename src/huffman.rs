@@ -193,8 +193,7 @@ impl EncoderBuilder {
         let symbol_count = bitwidthes
             .iter()
             .enumerate()
-            .filter(|e| *e.1 > 0)
-            .next_back()
+            .rfind(|e| *e.1 > 0)
             .map_or(0, |e| e.0)
             + 1;
         let builder = Self::new(symbol_count);
