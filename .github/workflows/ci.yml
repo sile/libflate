@@ -12,7 +12,7 @@ jobs:
         features: [--no-default-features, --all-features]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
       - name: Install ${{ matrix.toolchain }} toolchain
         run: |
@@ -20,17 +20,14 @@ jobs:
           rustup default ${{ matrix.toolchain }}
 
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: ${{ matrix.features }} --workspace
+        run: cargo check ${{ matrix.features }} --workspace
 
   no-std:
     name: no_std Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
       - name: Install nightly toolchain
         run: |
@@ -38,24 +35,15 @@ jobs:
           rustup default nightly
 
       - name: Install cargo no-std-check
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-no-std-check
+        run: cargo install cargo-no-std-check
 
       # https://github.com/mystor/cargo-no-std-check/issues/2
       # `--no-default-features` doesn't work with `--workspace` correctly.
       - name: Run cargo no-std-check on libflate crate
-        uses: actions-rs/cargo@v1
-        with:
-          command: no-std-check
-          args: --no-default-features
+        run: cargo no-std-check --no-default-features
 
       - name: Run cargo no-std-check on libflate_lz77 crate
-        uses: actions-rs/cargo@v1
-        with:
-          command: no-std-check
-          args: --no-default-features --manifest-path libflate_lz77/Cargo.toml
+        run: cargo no-std-check --no-default-features --manifest-path libflate_lz77/Cargo.toml
 
   test:
     name: Test Suite
@@ -66,7 +54,7 @@ jobs:
         features: [--no-default-features, --all-features]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
       - name: Install ${{ matrix.toolchain }} toolchain
         run: |
@@ -74,10 +62,7 @@ jobs:
           rustup default ${{ matrix.toolchain }}
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: ${{ matrix.features }} --workspace
+        run: cargo test ${{ matrix.features }} --workspace
 
   lints:
     name: Lints
@@ -88,7 +73,7 @@ jobs:
         features: [--no-default-features, --all-features]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
       - name: Install ${{ matrix.toolchain }} toolchain
         run: |
@@ -97,14 +82,8 @@ jobs:
           rustup component add rustfmt clippy
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
         if: matrix.toolchain != 'beta'
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: ${{ matrix.features }} --workspace -- -D warnings
+        run: cargo clippy ${{ matrix.features }} --workspace -- -D warnings
