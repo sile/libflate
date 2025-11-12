@@ -11,10 +11,10 @@ categories = ["compression", "no-std"]
 license = "MIT"
 edition = "2021"
 include = [
-	'Cargo.toml',
-        'README.md',
-        'LICENSE',
-        'src/**/*.rs',
+  "Cargo.toml",
+  "README.md",
+  "LICENSE",
+  "src/**/*.rs",
 ]
 
 [dependencies]
