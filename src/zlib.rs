@@ -932,4 +932,13 @@ mod tests {
         ];
         assert_eq!(buf, decoded_data);
     }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn issue_82() {
+        let encoded_data = [0x00, 0x00];
+        let error = Header::read_from(&encoded_data[..]).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("method=0"));
+    }
 }
