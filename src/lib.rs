@@ -12,10 +12,19 @@ macro_rules! invalid_data_error {
         ::core2::io::Error::new(::core2::io::ErrorKind::InvalidData, $fmt)
     };
     ($fmt:expr, $($arg:tt)*) => {
-        ::core2::io::Error::new(
-            ::core2::io::ErrorKind::InvalidData,
-            ::alloc::format!($fmt, $($arg)*),
-        )
+        {
+            #[cfg(feature = "std")]
+            {
+                ::core2::io::Error::new(
+                    ::core2::io::ErrorKind::InvalidData,
+                    ::alloc::format!($fmt, $($arg)*),
+                )
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                ::core2::io::Error::new(::core2::io::ErrorKind::InvalidData, $fmt)
+            }
+        }
     };
 }
 
