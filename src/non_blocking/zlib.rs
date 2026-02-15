@@ -155,7 +155,7 @@ impl<R: Read> Read for Decoder<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::{nb_read_to_end, WouldBlockReader};
+    use crate::util::{WouldBlockReader, nb_read_to_end};
     use crate::zlib::{EncodeOptions, Encoder};
     use alloc::vec::Vec;
     use core2::io::Write;
