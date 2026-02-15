@@ -156,7 +156,7 @@ impl<R: Read> Read for Decoder<R> {
 mod tests {
     use super::*;
     use crate::gzip::Encoder;
-    use crate::util::{nb_read_to_end, WouldBlockReader};
+    use crate::util::{WouldBlockReader, nb_read_to_end};
     use alloc::vec::Vec;
     use core2::io::Write;
 

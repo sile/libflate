@@ -240,7 +240,7 @@ impl Read for BlockDecoder {
 mod tests {
     use super::*;
     use crate::deflate::{EncodeOptions, Encoder};
-    use crate::util::{nb_read_to_end, WouldBlockReader};
+    use crate::util::{WouldBlockReader, nb_read_to_end};
     use alloc::{format, string::String, vec::Vec};
     use core2::io::{Read, Write};
 

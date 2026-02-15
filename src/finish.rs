@@ -125,10 +125,10 @@ impl<T: Complete> AutoFinish<T> {
 }
 impl<T: Complete> Drop for AutoFinish<T> {
     fn drop(&mut self) {
-        if let Some(inner) = self.inner.take() {
-            if let Err(e) = inner.complete() {
-                panic!("{}", e);
-            }
+        if let Some(inner) = self.inner.take()
+            && let Err(e) = inner.complete()
+        {
+            panic!("{}", e);
         }
     }
 }

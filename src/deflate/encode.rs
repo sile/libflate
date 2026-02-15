@@ -1,5 +1,5 @@
-use super::symbol;
 use super::BlockType;
+use super::symbol;
 use crate::bit;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
