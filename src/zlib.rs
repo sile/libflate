@@ -934,6 +934,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn issue_82() {
         let encoded_data = [0x00, 0x00];
         let error = Header::read_from(&encoded_data[..]).unwrap_err();
