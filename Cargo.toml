@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
 categories = ["compression", "no-std"]
 license = "MIT"
-edition = "2021"
+edition = "2024"
 include = [
   "Cargo.toml",
   "README.md",
@@ -37,4 +37,3 @@ exclude = ["flate_bench"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
-

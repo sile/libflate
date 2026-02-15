@@ -2,7 +2,7 @@
 name = "libflate_lz77"
 version = "2.2.0"
 authors = ["Takeru Ohta <phjgt308@gmail.com>"]
-edition = "2021"
+edition = "2024"
 description = "LZ77 encoder for libflate crate"
 homepage = "https://github.com/sile/libflate"
 repository = "https://github.com/sile/libflate"
