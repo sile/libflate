@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::zlib::{Encoder, Decoder};
 //!
 //! // Encoding
@@ -23,7 +23,7 @@ use crate::checksum;
 use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
-use core2::io;
+use no_std_io2::io;
 
 const COMPRESSION_METHOD_DEFLATE: u8 = 8;
 
@@ -297,7 +297,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Read;
+    /// use no_std_io2::io::Read;
     /// use libflate::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -350,7 +350,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Cursor;
+    /// use no_std_io2::io::Cursor;
     /// use libflate::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -538,7 +538,7 @@ where
     /// #[cfg(feature = "std")]
     /// use std::io::Write;
     /// #[cfg(not(feature = "std"))]
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -563,7 +563,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::zlib::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().no_compression();
@@ -601,7 +601,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::zlib::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -618,7 +618,7 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::zlib::Encoder;
     ///
@@ -685,7 +685,7 @@ mod tests {
     use super::*;
     use crate::finish::AutoFinish;
     use alloc::{borrow::ToOwned, string::ToString, vec, vec::Vec};
-    use core2::io::{Read as _, Write as _};
+    use no_std_io2::io::{Read as _, Write as _};
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();

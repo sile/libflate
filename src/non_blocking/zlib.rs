@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::zlib::Encoder;
 //! use libflate::non_blocking::zlib::Decoder;
 //!
@@ -23,7 +23,7 @@
 use crate::checksum;
 use crate::non_blocking::deflate;
 use crate::zlib::Header;
-use core2::io::{self, Read};
+use no_std_io2::io::{self, Read};
 
 /// ZLIB decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Read;
+    /// use no_std_io2::io::Read;
     /// use libflate::non_blocking::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -102,7 +102,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Cursor;
+    /// use no_std_io2::io::Cursor;
     /// use libflate::non_blocking::zlib::Decoder;
     ///
     /// let encoded_data = [120, 156, 243, 72, 205, 201, 201, 87, 8, 207, 47,
@@ -158,7 +158,7 @@ mod tests {
     use crate::util::{nb_read_to_end, WouldBlockReader};
     use crate::zlib::{EncodeOptions, Encoder};
     use alloc::vec::Vec;
-    use core2::io::Write;
+    use no_std_io2::io::Write;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

@@ -1,7 +1,7 @@
 //! `Finish` and related types.
 
 use core::ops::{Deref, DerefMut};
-use core2::io::{self, Write};
+use no_std_io2::io::{self, Write};
 
 /// `Finish` is a type that represents a value which
 /// may have an error occurred during the computation.
@@ -105,7 +105,7 @@ impl<T: Complete> AutoFinish<T> {
     /// # Examples
     ///
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::finish::AutoFinish;
     /// use libflate::gzip::Encoder;
     ///
@@ -167,7 +167,7 @@ impl<T: Complete> AutoFinishUnchecked<T> {
     /// # Examples
     ///
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
     ///

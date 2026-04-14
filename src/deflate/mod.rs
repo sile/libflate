@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::deflate::{Encoder, Decoder};
 //!
 //! // Encoding
@@ -43,7 +43,7 @@ mod tests {
     use super::*;
     use crate::lz77;
     use alloc::vec::Vec;
-    use core2::io::{Read, Write};
+    use no_std_io2::io::{Read, Write};
 
     #[test]
     fn encode_and_decode_works() {

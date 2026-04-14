@@ -1,4 +1,4 @@
-use core2::io;
+use no_std_io2::io;
 
 #[derive(Debug)]
 pub struct BitWriter<W> {
@@ -177,7 +177,7 @@ pub(crate) struct BitReaderState {
 mod tests {
     use super::*;
     use alloc::vec::Vec;
-    use core2::io;
+    use no_std_io2::io;
 
     #[test]
     fn writer_works() {

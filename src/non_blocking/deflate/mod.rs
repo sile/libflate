@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::deflate::Encoder;
 //! use libflate::non_blocking::deflate::Decoder;
 //!
