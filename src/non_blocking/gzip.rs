@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::gzip::Encoder;
 //! use libflate::non_blocking::gzip::Decoder;
 //!
@@ -23,7 +23,7 @@
 use crate::checksum;
 use crate::gzip::{Header, Trailer};
 use crate::non_blocking::deflate;
-use core2::io::{self, Read};
+use no_std_io2::io::{self, Read};
 
 /// GZIP decoder which supports non-blocking I/O.
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Read;
+    /// use no_std_io2::io::Read;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -103,7 +103,7 @@ impl<R: Read> Decoder<R> {
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Cursor;
+    /// use no_std_io2::io::Cursor;
     /// use libflate::non_blocking::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -158,7 +158,7 @@ mod tests {
     use crate::gzip::Encoder;
     use crate::util::{WouldBlockReader, nb_read_to_end};
     use alloc::vec::Vec;
-    use core2::io::Write;
+    use no_std_io2::io::Write;
 
     fn decode_all(buf: &[u8]) -> io::Result<Vec<u8>> {
         let decoder = Decoder::new(WouldBlockReader::new(buf));

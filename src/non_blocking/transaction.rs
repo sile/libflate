@@ -1,7 +1,7 @@
 use crate::bit;
 use alloc::vec::Vec;
 use core::cmp;
-use core2::io::{self, Read};
+use no_std_io2::io::{self, Read};
 
 #[derive(Debug)]
 pub struct TransactionalBitReader<R> {

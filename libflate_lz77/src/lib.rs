@@ -9,7 +9,7 @@ extern crate alloc;
 pub use self::default::{DefaultLz77Encoder, DefaultLz77EncoderBuilder};
 use alloc::vec::Vec;
 use core::cmp;
-use core2::io;
+use no_std_io2::io;
 use rle_decode_fast::rle_decode;
 
 mod default;
@@ -248,7 +248,7 @@ impl io::Read for Lz77Decoder {
 mod tests {
     use super::*;
     use alloc::vec::Vec;
-    use core2::io::Read as _;
+    use no_std_io2::io::Read as _;
 
     #[test]
     fn encoder_and_decoder_works() {

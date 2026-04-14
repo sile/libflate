@@ -4,7 +4,7 @@
 //!
 //! # Examples
 //! ```
-//! use core2::io::{Read, Write};
+//! use no_std_io2::io::{Read, Write};
 //! use libflate::gzip::{Encoder, Decoder};
 //!
 //! // Encoding
@@ -24,7 +24,7 @@ use crate::deflate;
 use crate::finish::{Complete, Finish};
 use crate::lz77;
 use alloc::{ffi::CString, vec::Vec};
-use core2::io;
+use no_std_io2::io;
 #[cfg(feature = "std")]
 use std::time;
 
@@ -767,7 +767,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -789,7 +789,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::gzip::{Encoder, EncodeOptions, HeaderBuilder};
     ///
     /// let header = HeaderBuilder::new().modification_time(123).finish();
@@ -828,7 +828,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::gzip::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new()).unwrap();
@@ -843,7 +843,7 @@ where
     /// it may be convenient to use `AutoFinishUnchecked` instead of the explicit invocation of this method.
     ///
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::finish::AutoFinishUnchecked;
     /// use libflate::gzip::Encoder;
     ///
@@ -925,7 +925,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Read;
+    /// use no_std_io2::io::Read;
     /// use libflate::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -974,7 +974,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Cursor;
+    /// use no_std_io2::io::Cursor;
     /// use libflate::gzip::Decoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -1063,7 +1063,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Read;
+    /// use no_std_io2::io::Read;
     /// use libflate::gzip::MultiDecoder;
     ///
     /// let mut encoded_data = Vec::new();
@@ -1121,7 +1121,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Cursor;
+    /// use no_std_io2::io::Cursor;
     /// use libflate::gzip::MultiDecoder;
     ///
     /// let encoded_data = [31, 139, 8, 0, 123, 0, 0, 0, 0, 3, 1, 12, 0, 243, 255,
@@ -1171,7 +1171,7 @@ mod tests {
     use super::*;
     use crate::finish::AutoFinish;
     use alloc::{vec, vec::Vec};
-    use core2::io::{Read, Write};
+    use no_std_io2::io::{Read, Write};
 
     fn decode(buf: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = Decoder::new(buf).unwrap();

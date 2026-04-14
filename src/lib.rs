@@ -9,20 +9,20 @@ extern crate alloc;
 
 macro_rules! invalid_data_error {
     ($fmt:expr) => {
-        ::core2::io::Error::new(::core2::io::ErrorKind::InvalidData, $fmt)
+        ::no_std_io2::io::Error::new(::no_std_io2::io::ErrorKind::InvalidData, $fmt)
     };
     ($fmt:expr, $($arg:tt)*) => {
         {
             #[cfg(feature = "std")]
             {
-                ::core2::io::Error::new(
-                    ::core2::io::ErrorKind::InvalidData,
+                ::no_std_io2::io::Error::new(
+                    ::no_std_io2::io::ErrorKind::InvalidData,
                     ::alloc::format!($fmt, $($arg)*),
                 )
             }
             #[cfg(not(feature = "std"))]
             {
-                ::core2::io::Error::new(::core2::io::ErrorKind::InvalidData, $fmt)
+                ::no_std_io2::io::Error::new(::no_std_io2::io::ErrorKind::InvalidData, $fmt)
             }
         }
     };
