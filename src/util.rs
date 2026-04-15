@@ -2,7 +2,7 @@
 pub(crate) mod testonly {
     use alloc::vec;
     use alloc::vec::Vec;
-    use core2::io::{self, Read};
+    use no_std_io2::io::{self, Read};
 
     pub struct WouldBlockReader<R> {
         inner: R,

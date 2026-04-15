@@ -5,7 +5,7 @@ use crate::finish::{Complete, Finish};
 use crate::lz77;
 use alloc::vec::Vec;
 use core::cmp;
-use core2::io;
+use no_std_io2::io;
 
 /// The default size of a DEFLATE block.
 pub const DEFAULT_BLOCK_SIZE: usize = 1024 * 1024;
@@ -143,7 +143,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
@@ -168,7 +168,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::deflate::{Encoder, EncodeOptions};
     ///
     /// let options = EncodeOptions::new().no_compression();
@@ -190,7 +190,7 @@ where
     ///
     /// # Examples
     /// ```
-    /// use core2::io::Write;
+    /// use no_std_io2::io::Write;
     /// use libflate::deflate::Encoder;
     ///
     /// let mut encoder = Encoder::new(Vec::new());
@@ -429,7 +429,7 @@ where
 mod tests {
     use super::super::Decoder;
     use super::*;
-    use core2::io::{Read as _, Write as _};
+    use no_std_io2::io::{Read as _, Write as _};
 
     #[test]
     fn test_issues_52() {

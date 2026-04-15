@@ -2,7 +2,7 @@
 use crate::bit;
 use alloc::{vec, vec::Vec};
 use core::cmp;
-use core2::io;
+use no_std_io2::io;
 
 const MAX_BITWIDTH: u8 = 15;
 

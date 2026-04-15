@@ -4,7 +4,7 @@ use crate::huffman::Builder;
 use crate::lz77;
 use alloc::{boxed::Box, vec::Vec};
 use core::{cmp, iter, ops::Range};
-use core2::io;
+use no_std_io2::io;
 
 const FIXED_LITERAL_OR_LENGTH_CODE_TABLE: [(u8, Range<u16>, u16); 4] = [
     (8, 000..144, 0b0_0011_0000),
