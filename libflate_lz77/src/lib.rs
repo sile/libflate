@@ -114,14 +114,11 @@ impl NoCompressionLz77Encoder {
     ///
     /// # Examples
     /// ```
-    /// use libflate::deflate;
-    /// use libflate::lz77::{Lz77Encode, NoCompressionLz77Encoder, CompressionLevel};
+    /// use libflate_lz77::{CompressionLevel, Lz77Encode, NoCompressionLz77Encoder};
     ///
     /// let lz77 = NoCompressionLz77Encoder::new();
     /// assert_eq!(lz77.compression_level(), CompressionLevel::None);
-    ///
-    /// let options = deflate::EncodeOptions::with_lz77(lz77);
-    /// let _deflate = deflate::Encoder::with_options(Vec::new(), options);
+    /// assert_eq!(lz77.window_size(), libflate_lz77::MAX_WINDOW_SIZE);
     /// ```
     pub fn new() -> Self {
         NoCompressionLz77Encoder

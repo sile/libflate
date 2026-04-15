@@ -22,14 +22,10 @@ impl DefaultLz77Encoder {
     ///
     /// # Examples
     /// ```
-    /// use libflate::deflate;
-    /// use libflate::lz77::{self, Lz77Encode, DefaultLz77Encoder};
+    /// use libflate_lz77::{self as lz77, DefaultLz77Encoder, Lz77Encode};
     ///
     /// let lz77 = DefaultLz77Encoder::new();
     /// assert_eq!(lz77.window_size(), lz77::MAX_WINDOW_SIZE);
-    ///
-    /// let options = deflate::EncodeOptions::with_lz77(lz77);
-    /// let _deflate = deflate::Encoder::with_options(Vec::new(), options);
     /// ```
     pub fn new() -> Self {
         DefaultLz77EncoderBuilder::new().build()
@@ -42,14 +38,10 @@ impl DefaultLz77Encoder {
     ///
     /// # Examples
     /// ```
-    /// use libflate::deflate;
-    /// use libflate::lz77::{self, Lz77Encode, DefaultLz77Encoder};
+    /// use libflate_lz77::{self as lz77, DefaultLz77Encoder, Lz77Encode};
     ///
     /// let lz77 = DefaultLz77Encoder::with_window_size(1024);
     /// assert_eq!(lz77.window_size(), 1024);
-    ///
-    /// let options = deflate::EncodeOptions::with_lz77(lz77);
-    /// let _deflate = deflate::Encoder::with_options(Vec::new(), options);
     /// ```
     pub fn with_window_size(size: u16) -> Self {
         DefaultLz77EncoderBuilder::new()

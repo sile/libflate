@@ -15,9 +15,6 @@ rle-decode-fast = "1.0.0"
 no_std_io2 = { version = "0.9", default-features = false, features = ["alloc"] }
 hashbrown = { version = "0.16" }
 
-[dev-dependencies]
-libflate = { path = "../", version = "2.3", default-features = false }
-
 [features]
 default = ["std"]
-std = ["no_std_io2/std", "libflate/std"]
+std = ["no_std_io2/std"]
