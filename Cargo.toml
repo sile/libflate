@@ -8,6 +8,7 @@ readme = "README.md"
 keywords = ["deflate", "gzip", "zlib"]
 categories = ["compression", "no-std"]
 license = "MIT"
+rust-version = "1.85.1"
 edition = "2024"
 include = [
   "Cargo.toml",
