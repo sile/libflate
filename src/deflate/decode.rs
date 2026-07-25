@@ -134,30 +134,25 @@ where
     R: Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if !self.lz77_decoder.buffer().is_empty() {
-            self.lz77_decoder.read(buf)
-        } else if self.eos {
-            Ok(0)
-        } else {
+        loop {
+            if !self.lz77_decoder.buffer().is_empty() {
+                return self.lz77_decoder.read(buf);
+            }
+            if self.eos {
+                return Ok(0);
+            }
             let bfinal = self.bit_reader.read_bit()?;
             let btype = self.bit_reader.read_bits(2)?;
             self.eos = bfinal;
             match btype {
-                0b00 => {
-                    self.read_non_compressed_block()?;
-                    self.read(buf)
+                0b00 => self.read_non_compressed_block()?,
+                0b01 => self.read_compressed_block(&symbol::FixedHuffmanCodec)?,
+                0b10 => self.read_compressed_block(&symbol::DynamicHuffmanCodec)?,
+                0b11 => {
+                    return Err(invalid_data_error!(
+                        "btype 0x11 of DEFLATE is reserved(error) value"
+                    ));
                 }
-                0b01 => {
-                    self.read_compressed_block(&symbol::FixedHuffmanCodec)?;
-                    self.read(buf)
-                }
-                0b10 => {
-                    self.read_compressed_block(&symbol::DynamicHuffmanCodec)?;
-                    self.read(buf)
-                }
-                0b11 => Err(invalid_data_error!(
-                    "btype 0x11 of DEFLATE is reserved(error) value"
-                )),
                 _ => unreachable!(),
             }
         }
@@ -239,6 +234,7 @@ mod tests {
     /// Each empty block adds one stack frame to libflate's recursive block decoder,
     /// so large `blocks` counts produce the stack-overflow payload while decompressing
     /// to identical bytes.
+    #[cfg(feature = "std")]
     pub fn make_large_deflate_stream(blocks: usize) -> Vec<u8> {
         /// The minimal valid WebAssembly module.
         const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];

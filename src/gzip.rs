@@ -1140,28 +1140,29 @@ where
     R: io::Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.eos {
-            return Ok(0);
-        }
+        loop {
+            if self.eos {
+                return Ok(0);
+            }
 
-        let read_size = self.decoder.read(buf)?;
-        if read_size == 0 {
+            let read_size = self.decoder.read(buf)?;
+            if read_size != 0 {
+                return Ok(read_size);
+            }
+
             match Header::read_from(self.as_inner_mut()) {
                 Err(e) => {
                     if e.kind() == io::ErrorKind::UnexpectedEof {
                         self.eos = true;
-                        Ok(0)
+                        return Ok(0);
                     } else {
-                        Err(e)
+                        return Err(e);
                     }
                 }
                 Ok(header) => {
                     self.decoder.reset(header);
-                    self.read(buf)
                 }
             }
-        } else {
-            Ok(read_size)
         }
     }
 }
