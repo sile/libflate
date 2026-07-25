@@ -218,4 +218,64 @@ mod tests {
         let mut decoder = Decoder::new(&input[..]);
         assert!(io::copy(&mut decoder, &mut io::sink()).is_err());
     }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn decode_large_deflate_stream() {
+        const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+        let gzip = make_large_deflate_stream(250_000);
+        let mut decoder = crate::gzip::Decoder::new(&gzip[..]).unwrap();
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, WASM);
+    }
+
+    /// Build a gzip stream made of DEFLATE stored blocks that decompresses
+    /// to the 8-byte empty WebAssembly module `\0asm\x01\x00\x00\x00`.
+    ///
+    /// The first `blocks - 1` blocks are empty non-final stored blocks and the last
+    /// is a final stored block carrying the wasm payload, wrapped in a gzip header/trailer.
+    ///
+    /// Each empty block adds one stack frame to libflate's recursive block decoder,
+    /// so large `blocks` counts produce the stack-overflow payload while decompressing
+    /// to identical bytes.
+    pub fn make_large_deflate_stream(blocks: usize) -> Vec<u8> {
+        /// The minimal valid WebAssembly module.
+        const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+        /// Gzip header. CM=deflate, OS=unknown.
+        const HEADER: [u8; 10] = [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03];
+        /// A non-final DEFLATE stored block of length zero: BFINAL=0, LEN=0, NLEN=0xffff.
+        const EMPTY_NONFINAL_STORED_BLOCK: [u8; 5] = [0x00, 0x00, 0x00, 0xff, 0xff];
+        /// Compute the IEEE CRC-32 (as used by gzip) of `data`.
+        fn crc32(data: &[u8]) -> u32 {
+            let mut crc: u32 = 0xffff_ffff;
+            for &byte in data {
+                crc ^= byte as u32;
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+                }
+            }
+            !crc
+        }
+
+        let len = WASM.len() as u16;
+        let mut payload = Vec::with_capacity(
+            HEADER.len() + (blocks - 1) * EMPTY_NONFINAL_STORED_BLOCK.len() + 21,
+        );
+        payload.extend_from_slice(&HEADER);
+        for _ in 0..(blocks - 1) {
+            payload.extend_from_slice(&EMPTY_NONFINAL_STORED_BLOCK);
+        }
+        // Final stored block: BFINAL byte, then LEN and its ones-complement NLEN
+        // then the raw stored bytes.
+        payload.push(1);
+        payload.extend_from_slice(&len.to_le_bytes());
+        payload.extend_from_slice(&(!len).to_le_bytes());
+        payload.extend_from_slice(&WASM);
+        // gzip trailer: CRC32 of the uncompressed data, then ISIZE mod 2^32.
+        payload.extend_from_slice(&crc32(&WASM).to_le_bytes());
+        payload.extend_from_slice(&(WASM.len() as u32).to_le_bytes());
+        payload
+    }
 }
