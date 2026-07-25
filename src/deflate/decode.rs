@@ -134,30 +134,25 @@ where
     R: Read,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if !self.lz77_decoder.buffer().is_empty() {
-            self.lz77_decoder.read(buf)
-        } else if self.eos {
-            Ok(0)
-        } else {
+        loop {
+            if !self.lz77_decoder.buffer().is_empty() {
+                return self.lz77_decoder.read(buf);
+            }
+            if self.eos {
+                return Ok(0);
+            }
             let bfinal = self.bit_reader.read_bit()?;
             let btype = self.bit_reader.read_bits(2)?;
             self.eos = bfinal;
             match btype {
-                0b00 => {
-                    self.read_non_compressed_block()?;
-                    self.read(buf)
+                0b00 => self.read_non_compressed_block()?,
+                0b01 => self.read_compressed_block(&symbol::FixedHuffmanCodec)?,
+                0b10 => self.read_compressed_block(&symbol::DynamicHuffmanCodec)?,
+                0b11 => {
+                    return Err(invalid_data_error!(
+                        "btype 0x11 of DEFLATE is reserved(error) value"
+                    ));
                 }
-                0b01 => {
-                    self.read_compressed_block(&symbol::FixedHuffmanCodec)?;
-                    self.read(buf)
-                }
-                0b10 => {
-                    self.read_compressed_block(&symbol::DynamicHuffmanCodec)?;
-                    self.read(buf)
-                }
-                0b11 => Err(invalid_data_error!(
-                    "btype 0x11 of DEFLATE is reserved(error) value"
-                )),
                 _ => unreachable!(),
             }
         }
@@ -217,5 +212,72 @@ mod tests {
         let input = b"\x04\x04\x04\x05:\x1az*\xfc\x06\x01\x90\x01\x06\x01";
         let mut decoder = Decoder::new(&input[..]);
         assert!(io::copy(&mut decoder, &mut io::sink()).is_err());
+    }
+
+    /// The minimal valid WebAssembly module — used as the payload of the regression
+    /// test below just so the decoded bytes are recognizable.
+    #[cfg(feature = "std")]
+    const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+
+    // Regression test for https://github.com/sile/libflate/issues/88 :
+    // decoding a stream carrying many DEFLATE blocks used to blow the stack
+    // because `Read for Decoder` was implemented with self-recursive tail calls.
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_issue_88() {
+        let gzip = make_large_deflate_stream(250_000);
+        let mut decoder = crate::gzip::Decoder::new(&gzip[..]).unwrap();
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, WASM);
+    }
+
+    /// Build a gzip stream that decompresses to `WASM` but is padded with
+    /// `blocks - 1` empty non-final DEFLATE stored blocks in front of the
+    /// final payload-carrying block. The empty blocks decompress to nothing,
+    /// so the point of a large `blocks` count is stress: each empty block
+    /// used to add one stack frame to `deflate::Decoder::read` and would
+    /// eventually overflow the thread stack (see `test_issue_88`).
+    #[cfg(feature = "std")]
+    fn make_large_deflate_stream(blocks: usize) -> Vec<u8> {
+        debug_assert!(
+            blocks >= 1,
+            "at least one block is required for the final payload"
+        );
+        /// Gzip header. CM=deflate, OS=unknown.
+        const HEADER: [u8; 10] = [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03];
+        /// A non-final DEFLATE stored block of length zero: BFINAL=0, LEN=0, NLEN=0xffff.
+        const EMPTY_NONFINAL_STORED_BLOCK: [u8; 5] = [0x00, 0x00, 0x00, 0xff, 0xff];
+        /// Compute the IEEE CRC-32 (as used by gzip) of `data`.
+        fn crc32(data: &[u8]) -> u32 {
+            let mut crc: u32 = 0xffff_ffff;
+            for &byte in data {
+                crc ^= byte as u32;
+                for _ in 0..8 {
+                    let mask = (crc & 1).wrapping_neg();
+                    crc = (crc >> 1) ^ (0xedb8_8320 & mask);
+                }
+            }
+            !crc
+        }
+
+        let len = WASM.len() as u16;
+        let mut payload = Vec::with_capacity(
+            HEADER.len() + (blocks - 1) * EMPTY_NONFINAL_STORED_BLOCK.len() + 21,
+        );
+        payload.extend_from_slice(&HEADER);
+        for _ in 0..(blocks - 1) {
+            payload.extend_from_slice(&EMPTY_NONFINAL_STORED_BLOCK);
+        }
+        // Final stored block: BFINAL byte, then LEN and its ones-complement NLEN
+        // then the raw stored bytes.
+        payload.push(1);
+        payload.extend_from_slice(&len.to_le_bytes());
+        payload.extend_from_slice(&(!len).to_le_bytes());
+        payload.extend_from_slice(&WASM);
+        // gzip trailer: CRC32 of the uncompressed data, then ISIZE mod 2^32.
+        payload.extend_from_slice(&crc32(&WASM).to_le_bytes());
+        payload.extend_from_slice(&(WASM.len() as u32).to_le_bytes());
+        payload
     }
 }
