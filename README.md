@@ -73,3 +73,8 @@ References
 - DEFLATE: [RFC-1951](https://tools.ietf.org/html/rfc1951)
 - ZLIB: [RFC-1950](https://tools.ietf.org/html/rfc1950)
 - GZIP: [RFC-1952](https://tools.ietf.org/html/rfc1952)
+
+See Also
+--------
+
+- [sile/noflate](https://github.com/sile/noflate): `no_std` sans-io DEFLATE / ZLIB / GZIP encoder and decoder with no dependencies.
