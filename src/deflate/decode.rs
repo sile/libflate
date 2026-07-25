@@ -214,10 +214,17 @@ mod tests {
         assert!(io::copy(&mut decoder, &mut io::sink()).is_err());
     }
 
+    /// The minimal valid WebAssembly module — used as the payload of the regression
+    /// test below just so the decoded bytes are recognizable.
+    #[cfg(feature = "std")]
+    const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+
+    // Regression test for https://github.com/sile/libflate/issues/88 :
+    // decoding a stream carrying many DEFLATE blocks used to blow the stack
+    // because `Read for Decoder` was implemented with self-recursive tail calls.
     #[test]
     #[cfg(feature = "std")]
-    fn decode_large_deflate_stream() {
-        const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+    fn test_issue_88() {
         let gzip = make_large_deflate_stream(250_000);
         let mut decoder = crate::gzip::Decoder::new(&gzip[..]).unwrap();
         let mut decoded = Vec::new();
@@ -225,19 +232,18 @@ mod tests {
         assert_eq!(decoded, WASM);
     }
 
-    /// Build a gzip stream made of DEFLATE stored blocks that decompresses
-    /// to the 8-byte empty WebAssembly module `\0asm\x01\x00\x00\x00`.
-    ///
-    /// The first `blocks - 1` blocks are empty non-final stored blocks and the last
-    /// is a final stored block carrying the wasm payload, wrapped in a gzip header/trailer.
-    ///
-    /// Each empty block adds one stack frame to libflate's recursive block decoder,
-    /// so large `blocks` counts produce the stack-overflow payload while decompressing
-    /// to identical bytes.
+    /// Build a gzip stream that decompresses to `WASM` but is padded with
+    /// `blocks - 1` empty non-final DEFLATE stored blocks in front of the
+    /// final payload-carrying block. The empty blocks decompress to nothing,
+    /// so the point of a large `blocks` count is stress: each empty block
+    /// used to add one stack frame to `deflate::Decoder::read` and would
+    /// eventually overflow the thread stack (see `test_issue_88`).
     #[cfg(feature = "std")]
-    pub fn make_large_deflate_stream(blocks: usize) -> Vec<u8> {
-        /// The minimal valid WebAssembly module.
-        const WASM: [u8; 8] = [0x00, b'a', b's', b'm', 0x01, 0x00, 0x00, 0x00];
+    fn make_large_deflate_stream(blocks: usize) -> Vec<u8> {
+        debug_assert!(
+            blocks >= 1,
+            "at least one block is required for the final payload"
+        );
         /// Gzip header. CM=deflate, OS=unknown.
         const HEADER: [u8; 10] = [0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03];
         /// A non-final DEFLATE stored block of length zero: BFINAL=0, LEN=0, NLEN=0xffff.
