@@ -3,6 +3,12 @@ use crate::lz77;
 use crate::non_blocking::transaction::TransactionalBitReader;
 use core::cmp;
 use no_std_io2::io::{self, Read};
+
+/// The maximum number of decoded-but-unread bytes buffered internally before
+/// the decoder yields output to the caller. See the corresponding constant in
+/// `crate::deflate::decode`.
+const MAX_INTERNAL_BUFFER: usize = 64 * 1024;
+
 /// DEFLATE decoder which supports non-blocking I/O.
 #[derive(Debug)]
 pub struct Decoder<R> {
@@ -141,6 +147,12 @@ impl<R: Read> Read for Decoder<R> {
                     DecoderState::DecodeBlock(symbol_decoder)
                 }
                 DecoderState::DecodeBlock(ref mut symbol_decoder) => {
+                    // Drain already-decoded data before decoding any more of the
+                    // current block, so the internal buffer stays bounded.
+                    if !self.block_decoder.unread_decoded_data().is_empty() {
+                        read_size = self.block_decoder.read(buf)?;
+                        break;
+                    }
                     self.block_decoder
                         .decode(&mut self.bit_reader, symbol_decoder)?;
                     read_size = self.block_decoder.read(buf)?;
@@ -194,6 +206,9 @@ impl BlockDecoder {
             match s {
                 symbol::Symbol::Code(code) => {
                     self.lz77_decoder.decode(code)?;
+                    if self.lz77_decoder.buffer().len() >= MAX_INTERNAL_BUFFER {
+                        break;
+                    }
                 }
                 symbol::Symbol::EndOfBlock => {
                     self.eob = true;
@@ -206,6 +221,10 @@ impl BlockDecoder {
 
     fn extend(&mut self, buf: &[u8]) {
         self.lz77_decoder.extend_from_slice(buf);
+    }
+
+    fn unread_decoded_data(&self) -> &[u8] {
+        self.lz77_decoder.buffer()
     }
 
     fn decode_symbol<R: Read>(
@@ -242,7 +261,7 @@ mod tests {
     use crate::deflate::{EncodeOptions, Encoder};
     use crate::util::{WouldBlockReader, nb_read_to_end};
     use alloc::{format, string::String, vec::Vec};
-    use no_std_io2::io::{Read, Write};
+    use no_std_io2::io::{self, Cursor, Read, Write};
 
     #[test]
     fn it_works() {
@@ -295,5 +314,37 @@ mod tests {
         let decoded_data = nb_read_to_end(decoder).unwrap();
 
         assert_eq!(decoded_data, b"Hello World!");
+    }
+
+    // Regression test for https://github.com/sile/libflate/issues/90 :
+    // decoding a single, highly-compressible DEFLATE block that expands beyond
+    // the 64 KiB internal buffer bound must resume correctly in the middle of
+    // the block and still produce byte-exact output.
+    #[test]
+    fn issue_90_byte_exact_resume_across_threshold() {
+        let text = b"abcdefgh".repeat(100_000); // 800 KiB, a single DEFLATE block
+        let mut encoder = Encoder::new(Vec::new());
+        encoder.write_all(&text).unwrap();
+        let encoded_data = encoder.finish().into_result().unwrap();
+
+        let mut decoder = Decoder::new(Cursor::new(&encoded_data[..]));
+        let mut output = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            match decoder.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => {
+                    output.extend_from_slice(&chunk[..n]);
+                    let buffered = decoder.block_decoder.lz77_decoder.buffer().len();
+                    assert!(
+                        buffered < MAX_INTERNAL_BUFFER + crate::lz77::MAX_LENGTH as usize,
+                        "internal buffer exceeded bound: {buffered} bytes"
+                    );
+                }
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(e) => panic!("decode failed: {e}"),
+            }
+        }
+        assert_eq!(output, text);
     }
 }
