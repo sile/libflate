@@ -3,11 +3,25 @@ use crate::bit;
 use crate::lz77;
 use no_std_io2::io::{self, Read};
 
+/// The maximum number of decoded-but-unread bytes buffered internally before
+/// the decoder yields output to the caller.
+///
+/// DEFLATE compressed blocks have no maximum expanded size, so without this
+/// bound a single highly-compressible block could grow the internal buffer
+/// without limit while decoding untrusted input. A single decoded symbol
+/// produces at most 258 bytes, so the buffer can only overshoot this threshold
+/// by at most 257 bytes before output is yielded.
+const MAX_INTERNAL_BUFFER: usize = 64 * 1024;
+
 /// DEFLATE decoder.
 #[derive(Debug)]
 pub struct Decoder<R> {
     bit_reader: bit::BitReader<R>,
     lz77_decoder: lz77::Lz77Decoder,
+    /// Active Huffman decoder when the decoder is suspended in the middle of a
+    /// compressed block (after `MAX_INTERNAL_BUFFER` was reached). `None` while
+    /// between blocks.
+    block_decoder: Option<symbol::Decoder>,
     eos: bool,
 }
 impl<R> Decoder<R>
@@ -36,6 +50,7 @@ where
         Decoder {
             bit_reader: bit::BitReader::new(inner),
             lz77_decoder: lz77::Lz77Decoder::new(),
+            block_decoder: None,
             eos: false,
         }
     }
@@ -75,6 +90,7 @@ where
     pub(crate) fn reset(&mut self) {
         self.bit_reader.reset();
         self.lz77_decoder.clear();
+        self.block_decoder = None;
         self.eos = false
     }
 
@@ -109,19 +125,32 @@ where
                 })
         }
     }
-    fn read_compressed_block<H>(&mut self, huffman: &H) -> io::Result<()>
+    fn enter_compressed_block<H>(&mut self, huffman: &H) -> io::Result<()>
     where
         H: symbol::HuffmanCodec,
     {
-        let symbol_decoder = huffman.load(&mut self.bit_reader)?;
+        self.block_decoder = Some(huffman.load(&mut self.bit_reader)?);
+        Ok(())
+    }
+
+    fn read_compressed_block(&mut self) -> io::Result<()> {
+        debug_assert!(self.block_decoder.is_some());
         loop {
+            let symbol_decoder = self
+                .block_decoder
+                .as_mut()
+                .expect("block_decoder must be present when reading a block");
             let s = symbol_decoder.decode_unchecked(&mut self.bit_reader);
             self.bit_reader.check_last_error()?;
             match s {
                 symbol::Symbol::Code(code) => {
                     self.lz77_decoder.decode(code)?;
+                    if self.lz77_decoder.buffer().len() >= MAX_INTERNAL_BUFFER {
+                        break;
+                    }
                 }
                 symbol::Symbol::EndOfBlock => {
+                    self.block_decoder = None;
                     break;
                 }
             }
@@ -138,6 +167,12 @@ where
             if !self.lz77_decoder.buffer().is_empty() {
                 return self.lz77_decoder.read(buf);
             }
+            // Resume decoding a compressed block that was suspended after
+            // `MAX_INTERNAL_BUFFER` was reached.
+            if self.block_decoder.is_some() {
+                self.read_compressed_block()?;
+                continue;
+            }
             if self.eos {
                 return Ok(0);
             }
@@ -146,8 +181,14 @@ where
             self.eos = bfinal;
             match btype {
                 0b00 => self.read_non_compressed_block()?,
-                0b01 => self.read_compressed_block(&symbol::FixedHuffmanCodec)?,
-                0b10 => self.read_compressed_block(&symbol::DynamicHuffmanCodec)?,
+                0b01 => {
+                    self.enter_compressed_block(&symbol::FixedHuffmanCodec)?;
+                    self.read_compressed_block()?;
+                }
+                0b10 => {
+                    self.enter_compressed_block(&symbol::DynamicHuffmanCodec)?;
+                    self.read_compressed_block()?;
+                }
                 0b11 => {
                     return Err(invalid_data_error!(
                         "btype 0x11 of DEFLATE is reserved(error) value"
@@ -279,5 +320,38 @@ mod tests {
         payload.extend_from_slice(&crc32(&WASM).to_le_bytes());
         payload.extend_from_slice(&(WASM.len() as u32).to_le_bytes());
         payload
+    }
+
+    // Regression test for https://github.com/sile/libflate/issues/90 :
+    // decoding a single, highly-compressible DEFLATE block used to buffer the
+    // entire expanded block before the first `read` returned, which allowed the
+    // internal buffer to grow without bound. The decoder must now yield output
+    // in bounded chunks (at most `MAX_INTERNAL_BUFFER + 258` unread bytes).
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_issue_90_bounded_buffering() {
+        use no_std_io2::io::Write as _;
+
+        let text = b"abcdefgh".repeat(100_000); // 800 KiB, a single DEFLATE block
+        let mut encoder = crate::deflate::Encoder::new(Vec::new());
+        encoder.write_all(&text).unwrap();
+        let encoded = encoder.finish().into_result().unwrap();
+
+        let mut decoder = Decoder::new(&encoded[..]);
+        let mut output = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            let n = decoder.read(&mut chunk).unwrap();
+            if n == 0 {
+                break;
+            }
+            output.extend_from_slice(&chunk[..n]);
+            let buffered = decoder.unread_decoded_data().len();
+            assert!(
+                buffered <= MAX_INTERNAL_BUFFER + 258,
+                "internal buffer exceeded bound: {buffered} bytes"
+            );
+        }
+        assert_eq!(output, text);
     }
 }
