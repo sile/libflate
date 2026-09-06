@@ -446,6 +446,18 @@ impl Header {
     }
 }
 
+/// Maximum length of a GZIP header `FNAME` or `FCOMMENT` string.
+///
+/// RFC 1952 does not set a limit for these fields, so an attacker-controlled
+/// stream could otherwise force an unbounded allocation while the header is
+/// parsed (see issue #91). The cap is therefore a policy choice, not a format
+/// requirement: it matches the 16-bit `FEXTRA` length field (the largest
+/// fixed-width field in a gzip header) and is orders of magnitude above
+/// real-world filename and comment sizes, so no legitimate input is rejected.
+/// A NUL terminator is still accepted immediately after exactly this many
+/// bytes; any further non-NUL byte is rejected.
+const MAX_HEADER_STRING_LEN: usize = 64 * 1024;
+
 fn read_cstring<R>(mut reader: R) -> io::Result<CString>
 where
     R: io::Read,
@@ -456,6 +468,12 @@ where
         reader.read_exact(&mut cbuf)?;
         if cbuf[0] == 0 {
             return Ok(CString::new(buf).unwrap());
+        }
+        if buf.len() >= MAX_HEADER_STRING_LEN {
+            return Err(invalid_data_error!(
+                "GZIP header string is too long: length > {} bytes",
+                MAX_HEADER_STRING_LEN
+            ));
         }
         buf.push(cbuf[0]);
     }
@@ -1256,6 +1274,36 @@ mod tests {
         decoder.read(&mut buf).unwrap();
         decoder.read_to_end(&mut buf).unwrap();
         assert_eq!(buf, b"Hello World");
+    }
+
+    #[test]
+    /// See: https://github.com/sile/libflate/issues/91
+    fn gzip_header_string_is_bounded() {
+        const MAX: usize = 64 * 1024;
+        for flag in [F_NAME, F_COMMENT] {
+            // A string of exactly MAX bytes followed by a NUL terminator is
+            // accepted and decoded losslessly.
+            let mut at_limit = Vec::new();
+            at_limit.extend_from_slice(&[0x1f, 0x8b, 0x08, flag, 0, 0, 0, 0, 0, 0x03]);
+            at_limit.extend(core::iter::repeat(b'a').take(MAX));
+            at_limit.push(0x00);
+            let header = Header::read_from(&at_limit[..]).unwrap();
+            let field = if flag == F_NAME {
+                header.filename().unwrap()
+            } else {
+                header.comment().unwrap()
+            };
+            assert_eq!(field.as_bytes().len(), MAX);
+
+            // One more non-NUL byte than the limit is rejected with
+            // `InvalidData`.
+            let mut over_limit = Vec::new();
+            over_limit.extend_from_slice(&[0x1f, 0x8b, 0x08, flag, 0, 0, 0, 0, 0, 0x03]);
+            over_limit.extend(core::iter::repeat(b'a').take(MAX + 1));
+            over_limit.push(0x00);
+            let err = Header::read_from(&over_limit[..]).unwrap_err();
+            assert_eq!(err.kind(), no_std_io2::io::ErrorKind::InvalidData);
+        }
     }
 
     #[test]
